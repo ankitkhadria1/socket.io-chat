@@ -1,0 +1,41 @@
+{
+	"id": "/Message",
+	"type": "object",
+	"properties": {
+		"chatId": {"type": "object"},
+		"text": { "type": "string", "minLength": 1 },
+		"createdAt": {"type": "date-time"},
+		"authorId": {"type": "object"},
+		"receivers": {
+			"type": "array",
+			"items": {"type": "object"}
+		},
+		"attachments": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"name": {"type": "string"},
+					"mime": {"type": "string"},
+					"ext": {"type": "string"},
+					"url": {"type": "string"}
+				}
+			}
+		},
+		"type": {
+			"enum": [
+				"user",
+				"system"
+			]
+		},
+		"system": {
+			"type": "object"
+		}
+	},
+	"required": [
+		"chatId",
+		"text",
+		"createdAt",
+		"authorId"
+	]
+}
