@@ -39,7 +39,7 @@
 							next(new Error('invalid credentials'));
 						}
 					});
-				}
+				};
 			}(socket)));
 		});
 

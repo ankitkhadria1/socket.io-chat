@@ -1030,10 +1030,6 @@
 			this.io.close();
 			this.removeAllListeners();
 		}
-
-		auth() {
-
-		}
 	}
 
 	module.exports = ChatClient;
