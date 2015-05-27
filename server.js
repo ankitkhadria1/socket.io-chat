@@ -24,25 +24,31 @@
 		var chatClient = new Chat.Client(server);
 
 		chatClient.on('authenticate', function (socket, data, next) {
-			db.getConnect(function (connect) {
-				console.log({
-					username: String(data.username),
-					password: String(data.password)
-				});
+			db.getConnect((function (s) {
+				return function (connect) {
+					connect.collection('users').findOne({
+						username: String(data.username),
+						password: String(data.password)
+					}, function (error, result) {
+						if (result) {
+							socket.auth = true;
+							socket.user = result._id;
 
-				connect.collection('users').findOne({
-					username: String(data.username),
-					password: String(data.password)
-				}, function (error, result) {
-					if (result) {
-						socket.auth = true;
-						socket.user = result._id;
-						next();
-					} else {
-						next(new Error('invalid credentials'));
-					}
-				});
-			});
+							next();
+						} else {
+							next(new Error('invalid credentials'));
+						}
+					});
+				}
+			}(socket)));
+		});
+
+		chatClient.on('connection', function () {
+			//console.log(this.io.sockets.sockets.length);
+		});
+
+		chatClient.on('disconnect', function () {
+			//console.log(this.io.sockets.sockets.length);
 		});
 
 		chatClient.on('error', function (socket, event, error) {
@@ -56,26 +62,25 @@
 		});
 
 		chatClient.validate('addMember', function (socket, data, next) {
-			console.log('add member validate');
+			//console.log('add member validate');
 			next();
 		});
 
 		chatClient.validate('createChat', function (socket, data, next) {
-			console.log('add member validate');
+			//console.log('add member validate');
 			next();
 		});
 
 		chatClient.validate('createChat', function (socket, data, next) {
-			console.log('add member validate 2');
+			//console.log('add member validate 2');
 			next();
 		});
 
 		chatClient.validate('createChat', function (socket, data, next) {
-			console.log('add member validate 3');
+			//console.log('add member validate 3');
 			next();
 		});
 	});
-
 
 
 }());

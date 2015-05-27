@@ -13,11 +13,11 @@
 		}
 
 		add(id, socket) {
-			if (!this.__members.has(id)) {
-				this.__members.set(id, new Member());
+			if (!this.__members.has(String(id))) {
+				this.__members.set(String(id), new Member());
 			}
 
-			this.__members.get(id).push(socket);
+			this.__members.get(String(id)).push(socket);
 
 			return this;
 		}
@@ -26,15 +26,18 @@
 			var member, socketIndex;
 
 			if (socket) {
-				member      = this.__members.get(id);
-				socketIndex = member.indexOf(socket);
-				member.splice(socketIndex, 1);
+				member      = this.__members.get(String(id));
 
-				if (member.length === 0) {
-					this.__members.delete(id);
+				if (member) {
+					socketIndex = member.indexOf(socket);
+					member.splice(socketIndex, 1);
+
+					if (member.length === 0) {
+						this.__members.delete(String(id));
+					}
 				}
 			} else {
-				this.__members.delete(id);
+				this.__members.delete(String(id));
 			}
 
 			return this;
@@ -47,7 +50,7 @@
 				res = [];
 
 				id.forEach((id) => {
-					member = this.__members.get(id);
+					member = this.__members.get(String(id));
 					member && member.forEach(function (socket) {
 						socket && res.push(socket);
 					});
@@ -55,7 +58,7 @@
 
 				return res;
 			} else {
-				return this.__members.get(id);
+				return this.__members.get(String(id));
 			}
 		}
 	}

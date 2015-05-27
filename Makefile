@@ -6,7 +6,7 @@ es6:
 	@babel $(SRC) --out-dir $(LIB)
 
 watch-es6:
-	@babel --watch $(SRC) --out-dir $(LIB)
+	@babel --watch $(SRC) --out-dir $(LIB) --source-maps
 
 test: test-unit test-functional
 

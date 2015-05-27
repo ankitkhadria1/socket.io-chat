@@ -2,15 +2,19 @@
 	"use strict";
 
 	var IO           = require('socket.io'),
-	    db           = require('./db'),
-	    Chat         = require('./chat'),
-	    Message      = require('./message'),
-	    EventEmitter = require('events').EventEmitter,
-	    util         = require('util'),
-	    _            = require('lodash'),
-	    FLAGS        = require('./flags'),
-	    Rooms        = require('./rooms'),
-	    Members      = require('./members');
+		db           = require('./db'),
+		Chat         = require('./chat'),
+		Message      = require('./message'),
+		EventEmitter = require('events').EventEmitter,
+		util         = require('util'),
+		_            = require('lodash'),
+		FLAGS        = require('./flags'),
+		socketMixin  = require('./socket'),
+		Rooms        = require('./rooms'),
+		Members      = require('./members'),
+		ClientError  = require('./error');
+
+	require('source-map-support').install();
 
 	/**
 	 * Verifies that the contractor is to perform the action
@@ -30,12 +34,13 @@
 
 			switch (flag) {
 				case FLAGS.AUTHOR:
-					result = chat.authorId && chat.authorId.equals(performer);
-					error  = new Error('Performer not author');
+					result = chat.creatorId && chat.creatorId.equals(performer);
+					error  = new ClientError('Performer not author');
 					break;
 				case FLAGS.MEMBER:
 					result = chat.hasMember(performer);
-					error  = new Error('Performer not member');
+					console.log('hasMember', performer, result);
+					error  = new ClientError('Performer not member');
 					break;
 				case FLAGS.OTHER:
 					result = true;
@@ -47,6 +52,15 @@
 
 			return result ? resolve() : reject(error);
 		});
+	}
+
+	function catchErrorMessage(error) {
+		switch (error.type) {
+			case 'client':
+				return error.message;
+			default:
+				return 'Unknown error';
+		}
 	}
 
 	/**
@@ -165,6 +179,8 @@
 			this.io = io = IO(server, { maxHttpBufferSize: 1000 });
 
 			io.on('connection', function (socket) {
+				self.emit('connection', socket);
+
 				socket.on(EVENTS.AUTHENTICATE, function (data) {
 					self.onAuthenticate(this, data);
 				});
@@ -220,13 +236,7 @@
 					self.emit('disconnect', socket);
 				});
 
-				socket.emitError = function (event, data = {}) {
-					this.emit(event, { error: data });
-				};
-
-				socket.emitResult = function (event, data = {}) {
-					this.emit(event, { result: data });
-				};
+				_.extend(socket, socketMixin);
 			});
 		}
 
@@ -289,26 +299,16 @@
 		onAuthenticate(socket, data = {}) {
 			this.emit(this.EVENTS.AUTHENTICATE, socket, data, (error) => {
 				if (error) {
-					return socket.emitError('login', { message: error.message });
+					return socket.emitError('login', { message: error.message || error });
 				}
 
 				if (!this.authorize(socket)) {
 					return;
 				}
 
-				this.model('chat').findAllByMember(socket.user)
-					.then((result) => {
-						if (!result) {
-							return socket.emit(this.EVENTS.AUTHENTICATE, { error: { message: 'Invalid login/password' } });
-						}
+				this.__members.add(socket.user, socket);
 
-						this.__members.add(socket.user, socket);
-
-						socket.emit('login', { result: { data: result } });
-					})
-					.catch((error) => {
-						return socket.emit('error', socketError(this.EVENTS.AUTHENTICATE, error));
-					});
+				socket.emitResult('login', { user: socket.user, data: [] });
 			});
 		}
 
@@ -324,8 +324,6 @@
 			this.create(data, socket.user)
 				.then((chat) => {
 					socket.emitResult(this.EVENTS.CREATE, { message: 'Chat created', data: chat.toJSON() });
-
-					console.log(this.__rooms.addMember);
 
 					this.__rooms.addMembers(
 						chat.get('_id'),
@@ -358,16 +356,30 @@
 		 * @param {ObjectId} data.chatId
 		 */
 		onLeave(socket, data = {}) {
+			var chat;
+
 			this.model('chat').findById(data.chatId)
-				.then((chat) => {
-					if (!chat) {
-						return socket.emit(this.EVENTS.LEAVE, { error: { message: 'Chat not found' } });
+				.then((result) => {
+					if (!(chat = result)) {
+						throw new ClientError('Chat not found');
 					}
 
-					this.leave(chat, socket.user)
+					console.log('before', chat.get('_id'), chat.get('members'));
+
+					return this.leave(chat, socket.user)
+				})
+				.then((member) => {
+					this.__rooms.removeMember(chat.get('_id'), member);
+					this.__members.get(chat.get('members').concat(member))
+						.forEach((socket) => {
+							socket.emitResult(this.EVENTS.LEAVE, {
+								message: 'The member leaved', data: member
+							});
+						});
 				})
 				.catch((error) => {
-					socket.emit('error', socketError(this.EVENTS.LEAVE, error));
+					console.log(error.message);
+					socket.emitError(this.EVENTS.LEAVE, { message: catchErrorMessage(error) });
 				});
 		}
 
@@ -380,34 +392,42 @@
 		 * @param {ObjectId} data.chatId
 		 */
 		onAddMember(socket, data = {}) {
+			var chat, countBefore, countAfter;
+
 			this.model('chat').findById(data.chatId)
-				.then((chat) => {
-					if (!chat) {
-						return socket.emit(this.EVENTS.ADDMEMBER, { error: { message: 'Chat not found' } });
+				.then((result) => {
+					if (!(chat = result)) {
+						throw new ClientError('Chat not found');
 					}
 
-					this.addMember(chat, data.member, socket.user)
-						.then((member) => {
-							if (chat.systemMessages && chat.systemMessages.addMember) {
-								this.newSystemMessage(socket, {
-									whoAdded:  socket.user,
-									whomAdded: member
-								})
-							}
+					countBefore = chat.get('members').length;
 
-							this.findSockets(chat.get('members')).forEach((socket) => {
-								socket.emit(this.EVENTS.ADDMEMBER, {
-									message: 'The member added',
-									data:    chat.toJSON()
-								});
-							});
+					return this.addMember(chat, data.member, socket.user)
+				})
+				.then((member) => {
+					countAfter = chat.get('members').length;
+
+					if (countBefore === countAfter) {
+						return;
+					}
+
+					if (chat.systemMessages && chat.systemMessages.addMember) {
+						this.newSystemMessage(socket, {
+							whoAdded: socket.user, whomAdded: member
 						})
-						.catch((error) => {
-							socket.emit('error', socketError(this.EVENTS.ADDMEMBER, error));
+					}
+
+					this.__rooms.addMembers(chat.get('_id'), member);
+
+					this.__members.get(chat.get('members'))
+						.forEach((socket) => {
+							socket.emitResult(this.EVENTS.ADDMEMBER, {
+								message: 'The member added', data: member
+							});
 						});
 				})
 				.catch((error) => {
-					socket.emit('error', socketError(this.EVENTS.ADDMEMBER, error));
+					socket.emitError(this.EVENTS.ADDMEMBER, { message: catchErrorMessage(error) });
 				});
 		}
 
@@ -420,37 +440,43 @@
 		 * @param {ObjectId} data.chatId
 		 */
 		onRemoveMember(socket, data = {}) {
+			var chat, countBefore, countAfter;
+
 			this.model('chat').findById(data.chatId)
-				.then((chat) => {
-					if (!chat) {
-						return socket.emit(this.EVENTS.REMOVEMEMBER, { error: { message: 'Chat not found' } });
+				.then((result) => {
+					if (!(chat = result)) {
+						throw new ClientError('Chat not found');
 					}
 
-					this.removeMember(chat, data.member, socket.user)
-						.then((chat, member) => {
-							if (chat.systemMessages && chat.systemMessages.removeMember) {
-								this.newSystemMessage(socket, {
-									whoRemove:  socket.user,
-									whomRemove: member
-								})
-							}
+					countBefore = chat.get('members').length;
 
-							this.io.in(String(chat.get('_id'))).emit(this.EVENTS.REMOVEMEMBER, {
-								message: 'The member removed',
-								data:    chat.toJSON(),
-								member:  member
-							});
+					return this.removeMember(chat, data.member, socket.user)
+				})
+				.then((member) => {
+					countAfter = chat.get('members').length;
 
-							findSocket(this.io, member, function (socket) {
-								socket.join(String(chat.get('_id')));
-							});
+					if (countBefore === countAfter) {
+						return;
+					}
+
+					if (chat.systemMessages && chat.systemMessages.removeMember) {
+						this.newSystemMessage(socket, {
+							whoRemove:  socket.user,
+							whomRemove: member
 						})
-						.catch(() => {
-							return socket.emit('error', socketError(this.EVENTS.REMOVEMEMBER, error));
+					}
+
+					this.__rooms.removeMember(chat.get('_id'), member);
+
+					this.__members.get(chat.get('members').concat(member))
+						.forEach((socket) => {
+							socket.emitResult(this.EVENTS.REMOVEMEMBER, {
+								message: 'The member removed', data: member
+							});
 						});
 				})
 				.catch((error) => {
-					socket.emit('error', socketError(this.EVENTS.REMOVEMEMBER, error));
+					socket.emitError(this.EVENTS.REMOVEMEMBER, { message: catchErrorMessage(error) });
 				});
 		}
 
@@ -656,7 +682,7 @@
 		validate(path, cb) {
 			path = path || 'default';
 			cb   = cb || function () {
-			};
+				};
 
 			if (!this.__validations[path]) {
 				this.__validations[path] = [];
@@ -725,7 +751,9 @@
 							this.emit(this.EVENTS.ADDMEMBER, chat, member);
 						});
 					})
-					.catch(reject);
+					.catch(function (error) {
+						reject(error);
+					});
 			});
 		}
 
@@ -738,7 +766,7 @@
 		 * @param {Number} flag
 		 * @returns {Promise}
 		 */
-		removeMember(chat, member, performer = null, flag = FLAGS.MEMBER) {
+		removeMember(chat, member, performer = null, flag = FLAGS.AUTHOR) {
 			chat.removeMember(member);
 
 			return new Promise((resolve, reject) => {
@@ -752,7 +780,7 @@
 								return reject(error);
 							}
 
-							resolve(chat, member);
+							resolve(member);
 
 							this.emit(this.EVENTS.REMOVEMEMBER, chat, member);
 						});
@@ -845,13 +873,13 @@
 						return validatePerformer(chat, performer, flag)
 					})
 					.then(() => {
-						chat.removeMember(performer);
+						//chat.removeMember(performer);
 						chat.update((error) => {
 							if (error) {
 								return reject(error);
 							}
 
-							resolve(chat, performer);
+							resolve(performer);
 
 							this.emit(this.EVENTS.LEAVE, chat, performer);
 						})
@@ -966,7 +994,7 @@
 		 */
 		_validatePath(path, socket, data) {
 			var validations = this.__validations[path],
-			    index       = 0;
+				index       = 0;
 
 			if (!validations) {
 				validations = [];
@@ -1001,6 +1029,10 @@
 		destroy() {
 			this.io.close();
 			this.removeAllListeners();
+		}
+
+		auth() {
+
 		}
 	}
 

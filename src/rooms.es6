@@ -13,30 +13,30 @@
 		}
 
 		create(id) {
-			this.__rooms.set(id, new Room());
+			this.__rooms.set(String(id), new Room());
 
-			return this.get(id);
+			return this.get(String(id));
 		}
 
 		remove(id) {
-			this.__rooms.delete(id);
+			this.__rooms.delete(String(id));
 
 			return this;
 		}
 
 		get(id) {
-			return this.__rooms.get(id);
+			return this.__rooms.get(String(id));
 		}
 
 		exist(id) {
-			return this.__rooms.has(id);
+			return this.__rooms.has(String(id));
 		}
 
 		addMembers(idRoom, member) {
-			var room = this.__rooms.get(idRoom);
+			var room = this.__rooms.get(String(idRoom));
 
 			if (!room) {
-				room = this.create(idRoom);
+				room = this.create(String(idRoom));
 			}
 
 			if (!(member instanceof Array)) {
@@ -44,8 +44,8 @@
 			}
 
 			member.forEach(function (member) {
-				if (!~room.indexOf(member)) {
-					room.push(member);
+				if (!~room.indexOf(String(member))) {
+					room.push(String(member));
 				}
 			});
 
@@ -53,7 +53,7 @@
 		}
 
 		removeMember(idRoom, member) {
-			var room  = this.__rooms.get(idRoom),
+			var room  = this.__rooms.get(String(idRoom)),
 			    index = -1;
 
 			if (room) {
@@ -62,7 +62,7 @@
 				}
 
 				member.forEach(function (member) {
-					index = room.indexOf(member);
+					index = room.indexOf(String(member));
 
 					~index && room.splice(index, 1);
 				});

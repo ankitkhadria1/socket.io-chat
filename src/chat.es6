@@ -66,7 +66,7 @@ module.exports = function (options) {
 				var index = this.indexMember(id);
 
 				if (index === -1) {
-					this.get('members').push(id);
+					this.get('members').push(db.ObjectId(id));
 				}
 			}
 
@@ -93,7 +93,7 @@ module.exports = function (options) {
 			id = db.ObjectID.isValid(id) ? db.ObjectID(id) : null;
 
 			index = _.findIndex(this.get('members'), function (member) {
-				return member.equals(id);
+				return member && member.equals(id);
 			});
 
 			return index;
