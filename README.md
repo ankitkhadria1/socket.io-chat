@@ -36,25 +36,25 @@ chatClient.on('authenticate', function (socket, data, next) {
 
 ## Events
 
-* ##### authenticate
+* authenticate
     `On authenticate user`
-* ##### create
+* create
     `On create new chat`
-* ##### enter
+* enter
     `On enter in chat`
-* ##### leave
+* leave
     `On leave from chat`
-* ##### addMember
+* addMember
     `On add member in chat`
-* ##### removeMember
+* removeMember
     `On remove member from chat`
-* ##### newMessage
+* newMessage
     `On add message in chat`
-* ##### newSystemMessage
+* newSystemMessage
     `Optional system messages (add/remove member, change title)`
-* ##### changeTitle
+* changeTitle
     `On change title of chat`
-* ##### findLast/findFrom/findAt
+* findLast/findFrom/findAt
     `On find messages of chat`
     
 ## Validate
@@ -85,13 +85,13 @@ chatClient.validate('newMessage', function (socket, options, next) {
 new chat.Client(server, options = {})
 ```
 
-* ##### options.collectionChat
+* options.collectionChat
     `name of chat collection in mongodb`
-* ##### options.collectionMessage
+* options.collectionMessage
     `name of messages collection in mongodb`
-* ##### options.eventPrefix
+* options.eventPrefix
     `prefix to all event names`
-* ##### options.EVENTS
+* options.EVENTS
     `enum of all event names in upper case`
 ```javascript
     {
@@ -107,13 +107,13 @@ new chat.Client(server, options = {})
 
 Access flags for the execution of operations by the performer
 
-* ##### AUTHOR
+* AUTHOR
     Performer must be a author of chat
-* ##### MEMBER
+* MEMBER
     Performer must be a member of chat
-* ##### OTHER
+* OTHER
     The performer is not checked. Access is permitted
-* ##### RECEIVER
+* RECEIVER
     Not used yet
 
 > Each message have array of receivers. It means, after leave or remove user from chat, this user can read messages 
@@ -121,24 +121,24 @@ Access flags for the execution of operations by the performer
 
 ## Api of chat client:
 
-* ##### use(cb)
+* use(cb)
     `It's a io.use()`
-* ##### validate(path, cb)
-* ##### create(data, creator)
-* ##### addMember(chat, member, performer = null, flag = FLAGS.MEMBER)
-* ##### removeMember(chat, member, performer = null, flag = FLAGS.AUTHOR)
-* ##### newMessage(chat, messageData, performer = null, flag = FLAGS.MEMBER)
-* ##### changeTitle(chat, title, performer = null, flag = FLAGS.MEMBER)
-* ##### leave(chat, performer, flag = FLAGS.MEMBER)
-* ##### newSystemMessage(chat, data)
-* ##### messagesFindLast(chatId, user, count, flag = FLAGS.RECEIVER) `flag not used`
-* ##### messagesFindFrom(chatId, messageId, user, count, flag = FLAGS.RECEIVER) `flag not used`
-* ##### messagesFindAt(chatId, messageId, user, count, flag = FLAGS.RECEIVER) `flag not used`
-* ##### destroy()
+* validate(path, cb)
+* create(data, creator)
+* addMember(chat, member, performer = null, flag = FLAGS.MEMBER)
+* removeMember(chat, member, performer = null, flag = FLAGS.AUTHOR)
+* newMessage(chat, messageData, performer = null, flag = FLAGS.MEMBER)
+* changeTitle(chat, title, performer = null, flag = FLAGS.MEMBER)
+* leave(chat, performer, flag = FLAGS.MEMBER)
+* newSystemMessage(chat, data)
+* messagesFindLast(chatId, user, count, flag = FLAGS.RECEIVER) `flag not used`
+* messagesFindFrom(chatId, messageId, user, count, flag = FLAGS.RECEIVER) `flag not used`
+* messagesFindAt(chatId, messageId, user, count, flag = FLAGS.RECEIVER) `flag not used`
+* destroy()
     `Close socket.io connection and remove all listeners from the client`
-* ##### model(name)
+* model(name)
     `Returns a reference to the model of the chat/message`
-* ##### get eventNames
+* get eventNames
     `Return list of event names`
-* ##### set eventNames(names)
+* set eventNames(names)
     `Set event names`
