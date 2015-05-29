@@ -62,11 +62,15 @@ module.exports = function (options) {
 		}
 
 		addMember(id) {
+			var index, memberId;
+
 			if (db.ObjectID.isValid(id)) {
-				var index = this.indexMember(id);
+				index = this.indexMember(id);
+				memberId = db.ObjectId(id);
 
 				if (index === -1) {
-					this.get('members').push(db.ObjectId(id));
+					this.get('members').push(memberId);
+					this.$addToSet('members', memberId);
 				}
 			}
 
@@ -82,6 +86,7 @@ module.exports = function (options) {
 				}
 
 				this.get('members').splice(index, 1);
+				this.$pull('members', id);
 			}
 
 			return this;

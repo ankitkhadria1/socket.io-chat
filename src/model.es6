@@ -4,6 +4,9 @@ var _ = require('lodash'),
 	EventEmitter = require('events').EventEmitter;
 
 var sl = Array.prototype.slice;
+var typeOf = function (object) {
+	return Object.prototype.toString.call(object).replace(/\[object\s(\w+)\]/, '$1');
+};
 
 class Model extends EventEmitter {
 	constructor(props = {}) {
@@ -12,6 +15,9 @@ class Model extends EventEmitter {
 		_.each(this.defaults(), (value, key) => {
 			this[key] = props[key] ? props[key] : value;
 		});
+
+		this.__atomics = {};
+		this.__update = {};
 	}
 
 	save() {
@@ -22,39 +28,50 @@ class Model extends EventEmitter {
 			this.emit('beforeSave');
 
 			db.getConnect((connect) => {
-				connect.collection(this.collection()).insertOne(this.toJSON(), {}, cb);
+				connect.collection(this.collection()).insert(this.toJSON(), {}, cb);
 				this.emit('save');
 			});
 		} else {
-			cb(new Error(this.validationError.message));
+			cb(this.validationError);
 		}
 
 		return this;
 	}
 
 	update() {
-		var data, cb, modelId;
+		var query, data, cb, modelId;
 
 		modelId = db.ObjectID(this.get('_id'));
-		data    = this.toJSON();
+		query   = { _id: modelId };
 		cb      = sl.call(arguments, -1)[0];
+		data    = _.extend({ $set: this.__update }, this.__atomics);
 
 		delete data._id;
 
 		db.getConnect((connect) => {
-			connect.collection(this.collection()).updateOne({ _id: modelId }, data, cb);
+			connect.collection(this.collection()).update(query, data, (error, result) => {
+				if (!error) {
+					this.__update = {};
+					this.__atomics = {};
+				}
+
+				cb(error, result);
+			});
 		});
 
 		return this;
 	}
 
 	isValid() {
-		var result;
+		var result, error;
 
 		result = this.validate();
 
 		if (result) {
-			this.validationError = result;
+			error = new Error(result.message);
+			error.type = 'validation';
+
+			this.validationError = error;
 		}
 
 		return !result;
@@ -96,6 +113,10 @@ class Model extends EventEmitter {
 
 		if (~Object.keys(this.defaults()).indexOf(key)) {
 			this[key] = value;
+
+			if (~['Number', 'String', 'Data', 'Boolean', 'Object', 'Null'].indexOf(typeOf(value))) {
+				this.__update[key] = value;
+			}
 		}
 
 		return this;
@@ -105,6 +126,26 @@ class Model extends EventEmitter {
 		if (~Object.keys(this.defaults()).indexOf(key)) {
 			return this[key];
 		}
+	}
+
+	$push(field, value) {
+		this.get(field) && this.__addAtomic('push', field, value);
+	}
+
+	$addToSet(field, value) {
+		this.get(field) && this.__addAtomic('addToSet', field, value);
+	}
+
+	$pull(field, value) {
+		this.get(field) && this.__addAtomic('pull', field, value);
+	}
+
+	__addAtomic(type, field, value) {
+		if (!this.__atomics['$'+ type]) {
+			this.__atomics['$'+ type] = {};
+		}
+
+		this.__atomics['$'+ type][field] = value;
 	}
 
 	destroy() {

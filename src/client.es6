@@ -39,7 +39,6 @@
 					break;
 				case FLAGS.MEMBER:
 					result = chat.hasMember(performer);
-					console.log('hasMember', performer, result);
 					error  = new ClientError('Performer not member');
 					break;
 				case FLAGS.OTHER:
@@ -56,6 +55,7 @@
 
 	function catchErrorMessage(error) {
 		switch (error.type) {
+			case 'validation':
 			case 'client':
 				return error.message;
 			default:
@@ -154,9 +154,11 @@
 				NEWMESSAGE:       'newMessage',
 				NEWSYSTEMMESSAGE: 'newSystemMessage',
 				CHANGETITLE:      'changeTitle',
-				FINDLAST:         'findLast',
-				FINDFROM:         'findFrom',
-				FINDAT:           'findAt'
+				FINDMESSAGESLAST: 'findMessagesLast',
+				FINDMESSAGESFROM: 'findMessagesFrom',
+				FINDMESSAGESAT:   'findMessagesAt',
+				FINDCHATS:        'findChats',
+				FINDCHAT:         'findChat'
 			};
 
 			_.assign(EVENTS, _.pick(options.EVENTS || {}, Object.keys(EVENTS)));
@@ -213,16 +215,24 @@
 					self.authorize(this) && self.onChangeTitle(this, data);
 				});
 
-				socket.on(EVENTS.FINDLAST, function (data) {
+				socket.on(EVENTS.FINDMESSAGESLAST, function (data) {
 					self.authorize(this) && self.onLoadLast(this, data);
 				});
 
-				socket.on(EVENTS.FINDFROM, function (data) {
+				socket.on(EVENTS.FINDMESSAGESFROM, function (data) {
 					self.authorize(this) && self.onLoadFrom(this, data);
 				});
 
-				socket.on(EVENTS.FINDAT, function (data) {
+				socket.on(EVENTS.FINDMESSAGESAT, function (data) {
 					self.authorize(this) && self.onLoadAt(this, data);
+				});
+
+				socket.on(EVENTS.FINDCHATS, function (data) {
+					self.authorize(this) && self.onFindChats(this, data);
+				});
+
+				socket.on(EVENTS.FINDCHAT, function (data) {
+					self.authorize(this) && self.onFindChat(this, data);
 				});
 
 				socket.on('error', function (error) {
@@ -364,8 +374,6 @@
 						throw new ClientError('Chat not found');
 					}
 
-					console.log('before', chat.get('_id'), chat.get('members'));
-
 					return this.leave(chat, socket.user)
 				})
 				.then((member) => {
@@ -378,7 +386,6 @@
 						});
 				})
 				.catch((error) => {
-					console.log(error.message);
 					socket.emitError(this.EVENTS.LEAVE, { message: catchErrorMessage(error) });
 				});
 		}
@@ -489,27 +496,27 @@
 		 * @param {String} data.text
 		 */
 		onNewMessage(socket, data = {}) {
+			var chat;
+
 			this.model('chat').findById(data.chatId)
-				.then((chat) => {
-					if (!chat) {
-						return socket.emit(this.EVENTS.NEWMESSAGE, { error: { message: 'Chat not found' } });
+				.then((result) => {
+					if (!(chat = result)) {
+						throw new ClientError('Chat not found');
 					}
 
 					return this.newMessage(chat, data, socket.user);
 				})
 				.then((message) => {
-					this.findSockets(message.get('receivers'))
+					this.__members.get(chat.get('members'))
 						.forEach((socket) => {
-							socket.emit(this.EVENTS.NEWMESSAGE, {
-								result: {
-									message: 'New message',
-									data:    message.toJSON()
-								}
+							socket.emitResult(this.EVENTS.NEWMESSAGE, {
+								message: 'New message',
+								data:    message.toJSON()
 							});
 						});
 				})
 				.catch((error) => {
-					socket.emit('error', socketError(this.EVENTS.NEWMESSAGE, error));
+					socket.emitError(this.EVENTS.NEWMESSAGE, { message: catchErrorMessage(error) });
 				});
 		}
 
@@ -522,9 +529,9 @@
 		 * @param {Number} data.count
 		 */
 		onLoadLast(socket, data = {}) {
-			this.messagesFindLast(data.chatId, socket.user, data.count)
+			this.findLastMessages(data.chatId, socket.user, data.count)
 				.then((messages) => {
-					socket.emit(this.EVENTS.FINDLAST, {
+					socket.emit(this.EVENTS.FINDMESSAGESLAST, {
 						result: {
 							chatId: data.chatId,
 							data:   messages
@@ -532,7 +539,7 @@
 					})
 				})
 				.catch((error) => {
-					socket.emit('error', socketError(this.EVENTS.FINDLAST, error));
+					socket.emit('error', socketError(this.EVENTS.FINDMESSAGESLAST, error));
 				});
 		}
 
@@ -546,9 +553,9 @@
 		 * @param {Number} data.count
 		 */
 		onLoadFrom(socket, data = {}) {
-			this.messagesFindFrom(data.chatId, data.messageId, socket.user, data.count)
+			this.findFromMessages(data.chatId, data.messageId, socket.user, data.count)
 				.then((messages) => {
-					socket.emit(this.EVENTS.FINDFROM, {
+					socket.emit(this.EVENTS.FINDMESSAGESFROM, {
 						result: {
 							chatId: data.chatId,
 							data:   messages
@@ -556,7 +563,7 @@
 					});
 				})
 				.catch((error) => {
-					socket.emit('error', socketError(this.EVENTS.FINDFROM, error));
+					socket.emit('error', socketError(this.EVENTS.FINDMESSAGESFROM, error));
 				});
 		}
 
@@ -570,17 +577,32 @@
 		 * @param {Number} data.count
 		 */
 		onLoadAt(socket, data = {}) {
-			this.messagesFindAt(data.chatId, data.messageId, socket.user, data.count)
+			this.findAtMessages(data.chatId, data.messageId, socket.user, data.count)
 				.then((messages) => {
-					socket.emit(this.EVENTS.FINDAT, {
-						result: {
-							chatId: data.chatId,
-							data:   messages
-						}
-					});
+					socket.emitResult(this.EVENTS.FINDMESSAGESAT, { chatId: data.chatId, data: messages });
 				})
 				.catch((error) => {
-					socket.emit('error', socketError(this.EVENTS.FINDAT, error));
+					socket.emit('error', socketError(this.EVENTS.FINDMESSAGESAT, error));
+				});
+		}
+
+		onFindChat(socket, data = {}) {
+			this.findChatById(socket.user, data.chatId)
+				.then((chat) => {
+					socket.emitResult(this.EVENTS.FINDCHAT, { data: chat });
+				})
+				.catch((error) => {
+					socket.emit('error', socketError(this.EVENTS.FINDCHAT, error));
+				});
+		}
+
+		onFindChats(socket, data = {}) {
+			this.findChats(socket.user, data.count)
+				.then((chats) => {
+					socket.emitResult(this.EVENTS.FINDCHATS, { data: chats });
+				})
+				.catch((error) => {
+					socket.emit('error', socketError(this.EVENTS.FINDCHATS, error));
 				});
 		}
 
@@ -921,6 +943,8 @@
 			});
 		}
 
+		/** find messages */
+
 		/**
 		 * Find last message in chat
 		 *
@@ -930,9 +954,9 @@
 		 * @param {Number} flag
 		 * @returns {Promise}
 		 */
-		messagesFindLast(chatId, user, count, flag = FLAGS.RECEIVER) {
+		findLastMessages(chatId, user, count, flag = FLAGS.RECEIVER) {
 			return new Promise((resolve, reject) => {
-				this._validatePath(this.EVENTS.FINDLAST, { chatId, user, count, flag })
+				this._validatePath(this.EVENTS.FINDMESSAGESLAST, { chatId, user, count, flag })
 					.then(() => {
 						return this.model('message').findLast(chatId, user, count);
 					})
@@ -951,9 +975,9 @@
 		 * @param {Number} flag
 		 * @returns {Promise}
 		 */
-		messagesFindFrom(chatId, messageId, user, count, flag = FLAGS.RECEIVER) {
+		findFromMessages(chatId, messageId, user, count, flag = FLAGS.RECEIVER) {
 			return new Promise((resolve, reject) => {
-				this._validatePath(this.EVENTS.FINDFROM, { chatId, messageId, user, count, flag })
+				this._validatePath(this.EVENTS.FINDMESSAGESFROM, { chatId, messageId, user, count, flag })
 					.then(() => {
 						return this.model('message').findFrom(chatId, messageId, user, count)
 					})
@@ -972,11 +996,35 @@
 		 * @param {Number} flag
 		 * @returns {Promise}
 		 */
-		messagesFindAt(chatId, messageId, user, count, flag = FLAGS.RECEIVER) {
+		findAtMessages(chatId, messageId, user, count, flag = FLAGS.RECEIVER) {
 			return new Promise((resolve, reject) => {
-				this._validatePath(this.EVENTS.FINDAT, { chatId, messageId, user, count, flag })
+				this._validatePath(this.EVENTS.FINDMESSAGESAT, { chatId, messageId, user, count, flag })
 					.then(() => {
 						return this.model('message').findAt(chatId, messageId, user, count)
+					})
+					.then(resolve, reject)
+					.catch(reject);
+			});
+		}
+
+		/** find chats */
+
+		findChats(user, count = 10) {
+			return new Promise((resolve, reject) => {
+				this._validatePath(this.EVENTS.FINDMESSAGECHATS, { user, count })
+					.then(() => {
+						return this.model('chat').findAllByMember(user)
+					})
+					.then(resolve, reject)
+					.catch(reject);
+			});
+		}
+
+		findChatById(user, chatId) {
+			return new Promise((resolve, reject) => {
+				this._validatePath(this.EVENTS.FINDMESSAGECHAT, { user, chatId })
+					.then(() => {
+						return this.model('chat').findByMember(chatId, user)
 					})
 					.then(resolve, reject)
 					.catch(reject);
@@ -992,7 +1040,7 @@
 		 * @returns {Promise}
 		 * @private
 		 */
-		_validatePath(path, socket, data) {
+		_validatePath(path, data) {
 			var validations = this.__validations[path],
 				index       = 0;
 
@@ -1010,7 +1058,7 @@
 
 					if (validation) {
 						index++;
-						return validation(socket, data, next);
+						return validation(data, next);
 					}
 
 					if (index === validations.length) {

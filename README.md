@@ -138,6 +138,7 @@ Access flags for the execution of operations by the performer
     `Close socket.io connection and remove all listeners from the client`
 * model(name)
     `Returns a reference to the model of the chat/message`
+    `client.model('chat').findById(chatId).then(resolve, reject)`
 * get eventNames
     `Return list of event names`
 * set eventNames(names)

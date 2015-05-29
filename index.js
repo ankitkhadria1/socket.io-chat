@@ -6,6 +6,7 @@
 
 	module.exports = {
 		setConnect: db.setConnect,
+		getConnect: db.getConnect,
 		Client:     ChatClient
 	};
 

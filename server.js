@@ -56,30 +56,6 @@
 			console.log('client error', event, error.stack);
 			//socket.emit('error');
 		});
-
-		chatClient.on('beforeCreateChat', function (socket, chatModel) {
-			chatModel.setCreator(socket.user);
-		});
-
-		chatClient.validate('addMember', function (socket, data, next) {
-			//console.log('add member validate');
-			next();
-		});
-
-		chatClient.validate('createChat', function (socket, data, next) {
-			//console.log('add member validate');
-			next();
-		});
-
-		chatClient.validate('createChat', function (socket, data, next) {
-			//console.log('add member validate 2');
-			next();
-		});
-
-		chatClient.validate('createChat', function (socket, data, next) {
-			//console.log('add member validate 3');
-			next();
-		});
 	});
 
 
