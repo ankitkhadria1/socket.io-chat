@@ -474,7 +474,6 @@
 					}
 
 					this.__rooms.removeMember(chat.get('_id'), member);
-
 					this.__members.get(chat.get('members').concat(member))
 						.forEach((socket) => {
 							socket.emitResult(this.EVENTS.REMOVEMEMBER, {
@@ -828,7 +827,7 @@
 			message.setChat(chat);
 			message.setAuthor(performer);
 			message.setReceivers(chat.members);
-
+			
 			return new Promise((resolve, reject) => {
 				this._validatePath(this.EVENTS.NEWMESSAGE, { chat, message, performer, flag })
 					.then(function () {
@@ -895,7 +894,7 @@
 						return validatePerformer(chat, performer, flag)
 					})
 					.then(() => {
-						//chat.removeMember(performer);
+						chat.removeMember(performer);
 						chat.update((error) => {
 							if (error) {
 								return reject(error);

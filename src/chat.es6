@@ -86,7 +86,7 @@ module.exports = function (options) {
 				}
 
 				this.get('members').splice(index, 1);
-				this.$pull('members', id);
+				this.$pull('members', db.ObjectId(id));
 			}
 
 			return this;
