@@ -1,0 +1,7 @@
+[
+  { username: "thereissuchname", password: "123456", _id: "55510fdd30c4de8501e199b1" },
+  { username: "test", password: "654321", _id: "55510fdd30c4de8501e199b1" },
+  { username: "Iron Man", password: "123456", _id: "55510fdd30c4de8501e199b1" },
+  { username: "user1", password: "123456", _id: "55510fdd30c4de8501e199b1" },
+  { username: "FOO", password: "123456", _id: "55510fdd30c4de8501e199b1" }
+]

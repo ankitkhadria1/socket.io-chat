@@ -280,10 +280,10 @@
 					}, done);
 			});
 
-			it('findLast', function (done) {
+			it('findMessagesLast', function (done) {
 				var user = new db.ObjectID();
 
-				client.validate('findLast', function () {
+				client.validate('findMessagesLast', function () {
 					done();
 				});
 
@@ -291,15 +291,15 @@
 					.then(function (chat) {
 						should(chat).ok;
 
-						client.messagesFindLast(chat.get('_id'), user, 10);
+						client.findLastMessages(chat.get('_id'), user, 10);
 
 					}, done);
 			});
 
-			it('findFrom', function (done) {
+			it('findMessagesFrom', function (done) {
 				var user = new db.ObjectID();
 
-				client.validate('findFrom', function () {
+				client.validate('findMessagesFrom', function () {
 					done();
 				});
 
@@ -307,7 +307,7 @@
 					.then(function (chat) {
 						should(chat).ok;
 
-						client.messagesFindFrom(chat.get('_id'), user, 10);
+						client.findFromMessages(chat.get('_id'), user, 10);
 
 					}, done);
 			});
@@ -315,7 +315,7 @@
 			it('findAt', function (done) {
 				var user = new db.ObjectID();
 
-				client.validate('findAt', function () {
+				client.validate('findMessagesAt', function () {
 					done();
 				});
 
@@ -323,7 +323,7 @@
 					.then(function (chat) {
 						should(chat).ok;
 
-						client.messagesFindAt(chat.get('_id'), user, 10);
+						client.findAtMessages(chat.get('_id'), user, 10);
 
 					}, done);
 			});
@@ -342,6 +342,7 @@
 				client.create({ name: prefixName + faker.company.companyName() }, creator)
 					.then(function (result) {
 						chat = result;
+
 						done();
 					}, done);
 			});
@@ -474,7 +475,7 @@
 						should(beforeResult).ok;
 
 						client.removeMember(chat, undefined, null, client.FLAGS.OTHER)
-							.then(function (chat) {
+							.then(function () {
 								should(chat.get('members').length).equal(beforeResult.members.length);
 
 								connect.collection(chat.collection())
@@ -501,7 +502,7 @@
 						should(beforeResult).ok;
 
 						client.removeMember(chat, 'dasdas', null, client.FLAGS.OTHER)
-							.then(function (chat) {
+							.then(function () {
 								should(chat.get('members').length).equal(beforeResult.members.length);
 
 								connect.collection(chat.collection())
@@ -528,7 +529,7 @@
 						should(beforeResult).ok;
 
 						client.removeMember(chat, members[1], null, client.FLAGS.OTHER)
-							.then(function (chat) {
+							.then(function () {
 								should(chat.get('members').length).equal(beforeResult.members.length - 1);
 
 								connect.collection(chat.collection())
@@ -557,7 +558,7 @@
 							.then(function () {
 								return client.removeMember(chat, members[2], null, client.FLAGS.OTHER);
 							})
-							.then(function (chat) {
+							.then(function () {
 								should(chat.get('members').length).equal(beforeResult.members.length - 2);
 
 								connect.collection(chat.collection())
@@ -585,7 +586,7 @@
 						should(chat.get('creatorId')).ok;
 
 						client.removeMember(chat, chat.get('creatorId'), null, client.FLAGS.OTHER)
-							.then(function (chat) {
+							.then(function () {
 								should(chat.get('members').length).equal(beforeResult.members.length);
 
 								connect.collection(chat.collection())
@@ -1166,7 +1167,7 @@
 					var removedMember = String(chat.members[1]);
 
 					client.leave(chat, chat.members[1])
-						.then(function (chat) {
+						.then(function () {
 							should(chat).ok;
 							should(chat.members.length).equal(beforeChat.members.length - 1);
 

@@ -1,6 +1,7 @@
 # Logs
 logs
 *.log
+npm-debug.log*
 
 # Runtime data
 pids
@@ -27,5 +28,6 @@ build/Release
 node_modules
 
 .idea
-public
+public/bower_components
+public/js/bower_components
 build

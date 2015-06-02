@@ -1,41 +1,42 @@
 {
-	"id": "/Chat",
-	"type": "object",
-	"properties": {
-		"name": {
-			"type": "string",
-			"minLength": 3
-		},
-		"title": { "type": "string" },
-		"type": {
-			"enum": [
-				"private",
-				"group"
-			]
-		},
-		"creatorId": {
-			"type": "object"
-		},
-		"createdAt": { "type": "date-time" },
-		"members": {
-			"type": "array",
-			"items": {
-				"type": "object"
-			}
-		},
-		"systemMessages": {
-			"type": "object",
-			"properties": {
-				"addMember": { "type": "boolean" },
-				"removeMember": { "type": "boolean" },
-				"changeTitle": { "type": "boolean" }
-			}
-		}
-	},
-	"required": [
-		"name",
-		"creatorId",
-		"createdAt",
-		"type"
-	]
+  "id": "/Chat",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 3
+    },
+    "title": { "type": "string" },
+    "type": {
+      "enum": [
+        "private",
+        "group"
+      ]
+    },
+    "creatorId": {
+      "type": "object"
+    },
+    "createdAt": { "type": "date-time" },
+    "members": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "systemMessages": {
+      "type": "object",
+      "properties": {
+        "addMember": { "type": "boolean" },
+        "removeMember": { "type": "boolean" },
+        "leaveMember": { "type": "boolean" },
+        "changeTitle": { "type": "boolean" }
+      }
+    }
+  },
+  "required": [
+    "name",
+    "creatorId",
+    "createdAt",
+    "type"
+  ]
 }
