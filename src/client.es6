@@ -7,52 +7,16 @@
 		Message      = require('./message'),
 		EventEmitter = require('events').EventEmitter,
 		util         = require('util'),
-		_            = require('lodash'),
+		_            = require('underscore'),
 		FLAGS        = require('./flags'),
 		socketMixin  = require('./socket'),
 		Rooms        = require('./rooms'),
 		Members      = require('./members'),
-		clientSocket = require('./clientSocket'),
+		ClientSocket = require('./clientSocket'),
+		ClientAction = require('./clientAction'),
 		ClientError  = require('./error');
 
 	require('source-map-support').install();
-
-	/**
-	 * Verifies that the contractor is to perform the action
-	 *
-	 * @param {ChatModel} chat
-	 * @param {ObjectId} performer
-	 * @param {Number} flag
-	 * @returns {Promise}
-	 */
-	function validatePerformer(chat, performer, flag) {
-		return new Promise(function (resolve, reject) {
-			var result = false, error;
-
-			//if (typeof performer === "undefined" && typeof flag === "undefined") {
-			//	return resolve();
-			//}
-
-			switch (flag) {
-				case FLAGS.AUTHOR:
-					result = chat.creatorId && chat.creatorId.equals(performer);
-					error  = new ClientError('Performer not author');
-					break;
-				case FLAGS.MEMBER:
-					result = chat.hasMember(performer);
-					error  = new ClientError('Performer not member');
-					break;
-				case FLAGS.OTHER:
-					result = true;
-					break;
-				default:
-					result = false;
-					error  = new Error('Undefined flag');
-			}
-
-			return result ? resolve() : reject(error);
-		});
-	}
 
 	/**
 	 * @class ChatClient
@@ -99,7 +63,7 @@
 
 			_.assign(EVENTS, _.pick(options.EVENTS || {}, Object.keys(EVENTS)));
 
-			EVENTS = _.mapValues(EVENTS, function (value) {
+			EVENTS = _.mapObject(EVENTS, function (value) {
 				return eventPrefix + value;
 			});
 
@@ -107,6 +71,9 @@
 
 			this.__validations = {};
 			this.__models      = {};
+
+			this.action = new ClientAction();
+			this.socket = new ClientSocket();
 
 			this.__members = new Members();
 			this.__rooms   = new Rooms();
@@ -120,54 +87,55 @@
 				self.emit('connection', socket);
 
 				socket.on(EVENTS.AUTHENTICATE, function (data) {
-					clientSocket.onAuthenticate(self, this, data);
+					self.socket.onAuthenticate(self, this, data);
 				});
 
 				socket.on(EVENTS.CREATE, function (data) {
-					self.authorize(this) && clientSocket.onCreate(self, this, data);
+					self.authorize(this) && self.socket.onCreate(self, this, data);
 				});
 
 				socket.on(EVENTS.LEAVE, function (data) {
-					self.authorize(this) && clientSocket.onLeave(self, this, data);
+					self.authorize(this) && self.socket.onLeave(self, this, data);
 				});
 
 				socket.on(EVENTS.ADDMEMBER, function (data) {
-					self.authorize(this) && clientSocket.onAddMember(self, this, data);
+					self.authorize(this) && self.socket.onAddMember(self, this, data);
 				});
 
 				socket.on(EVENTS.REMOVEMEMBER, function (data) {
-					self.authorize(this) && clientSocket.onRemoveMember(self, this, data);
+					self.authorize(this) && self.socket.onRemoveMember(self, this, data);
 				});
 
 				socket.on(EVENTS.NEWMESSAGE, function (data) {
-					self.authorize(this) && clientSocket.onNewMessage(self, this, data);
+					self.authorize(this) && self.socket.onNewMessage(self, this, data);
 				});
 
 				socket.on(EVENTS.CHANGETITLE, function (data) {
-					self.authorize(this) && clientSocket.onChangeTitle(self, this, data);
+					self.authorize(this) && self.socket.onChangeTitle(self, this, data);
 				});
 
 				socket.on(EVENTS.FINDMESSAGESLAST, function (data) {
-					self.authorize(this) && clientSocket.onLoadLast(self, this, data);
+					self.authorize(this) && self.socket.onFindMessagesLast(self, this, data);
 				});
 
 				socket.on(EVENTS.FINDMESSAGESFROM, function (data) {
-					self.authorize(this) && clientSocket.onLoadFrom(self, this, data);
+					self.authorize(this) && self.socket.onFindMessagesFrom(self, this, data);
 				});
 
 				socket.on(EVENTS.FINDMESSAGESAT, function (data) {
-					self.authorize(this) && clientSocket.onLoadAt(self, this, data);
+					self.authorize(this) && self.socket.onFindMessagesAt(self, this, data);
 				});
 
 				socket.on(EVENTS.FINDCHATS, function (data) {
-					self.authorize(this) && clientSocket.onFindChats(self, this, data);
+					self.authorize(this) && self.socket.onFindChats(self, this, data);
 				});
 
 				socket.on(EVENTS.FINDCHAT, function (data) {
-					self.authorize(this) && clientSocket.onFindChat(self, this, data);
+					self.authorize(this) && self.socket.onFindChat(self, this, data);
 				});
 
 				socket.on('error', function (error) {
+					console.log(error);
 					self.emit('error', this, error.event, error);
 				});
 
@@ -318,7 +286,7 @@
 			return new Promise((resolve, reject) => {
 				this._validatePath(this.EVENTS.ADDMEMBER, { chat, member, performer, flag })
 					.then(() => {
-						return validatePerformer(chat, performer, flag);
+						return this.action.validate(flag, { chat, performer });
 					})
 					.then(() => {
 						chat.update((error) => {
@@ -351,8 +319,8 @@
 
 			return new Promise((resolve, reject) => {
 				this._validatePath(this.EVENTS.REMOVEMEMBER, { chat, member, performer, flag })
-					.then(function () {
-						return validatePerformer(chat, performer, flag);
+					.then(() => {
+						return this.action.validate(flag, { chat, performer });
 					})
 					.then(() => {
 						chat.update((error) => {
@@ -389,8 +357,8 @@
 
 			return new Promise((resolve, reject) => {
 				this._validatePath(this.EVENTS.NEWMESSAGE, { chat, message, performer, flag })
-					.then(function () {
-						return validatePerformer(chat, performer, flag);
+					.then(() => {
+						return this.action.validate(flag, { chat, performer });
 					})
 					.then(() => {
 						message.save((error) => {
@@ -419,8 +387,8 @@
 		changeTitle(chat, title, performer = null, flag = FLAGS.MEMBER) {
 			return new Promise((resolve, reject) => {
 				this._validatePath(this.EVENTS.CHANGETITLE, { chat, title, performer, flag })
-					.then(function () {
-						return validatePerformer(chat, performer, flag)
+					.then(() => {
+						return this.action.validate(flag, { chat, performer });
 					})
 					.then(() => {
 						chat.setTitle(title)
@@ -449,8 +417,8 @@
 		leave(chat, performer, flag = FLAGS.MEMBER) {
 			return new Promise((resolve, reject) => {
 				this._validatePath(this.EVENTS.LEAVE, { chat, performer, flag })
-					.then(function () {
-						return validatePerformer(chat, performer, flag)
+					.then(() => {
+						return this.action.validate(flag, { chat, performer });
 					})
 					.then(() => {
 						chat.removeMember(performer);
@@ -480,7 +448,7 @@
 
 			message = new (this.model('message'))({ text: ' ' });
 			message.setChat(chat);
-			message.setAuthor();
+			message.setSystemAuthor();
 			message.setReceivers(chat.members);
 			message.setSystem(data);
 

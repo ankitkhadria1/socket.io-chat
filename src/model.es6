@@ -1,5 +1,5 @@
 (function () {
-	var _            = require('lodash'),
+	var _            = require('underscore'),
 		db           = require('./db'),
 		Validator    = require('jsonschema').Validator,
 		EventEmitter = require('events').EventEmitter,

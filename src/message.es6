@@ -1,7 +1,7 @@
 (function () {
 	"use strict";
 
-	var _            = require('lodash'),
+	var _            = require('underscore'),
 	    util         = require('util'),
 	    db           = require('./db'),
 	    Model        = require('./model'),

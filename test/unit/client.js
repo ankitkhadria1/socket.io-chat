@@ -427,6 +427,7 @@
 					.catch(done);
 			});
 		});
+
 		// TODO: проверка на смену типа
 		describe('remove member from chat', function () {
 			var client, chat, creator, members = [];
