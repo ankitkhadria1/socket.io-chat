@@ -153,3 +153,6 @@ client.action.addValidator(someFlag, function (options) {
     `Return list of event names`
 * set eventNames(names)
     `Set event names`
+    
+## License
+MIT
