@@ -537,7 +537,7 @@
 
 		findChats(user, count = 10) {
 			return new Promise((resolve, reject) => {
-				this._validatePath(this.EVENTS.FINDMESSAGECHATS, { user, count })
+				this._validatePath(this.EVENTS.FINDCHATS, { user, count })
 					.then(() => {
 						return this.model('chat').findAllByMember(user)
 					})
@@ -548,7 +548,7 @@
 
 		findChatById(user, chatId) {
 			return new Promise((resolve, reject) => {
-				this._validatePath(this.EVENTS.FINDMESSAGECHAT, { user, chatId })
+				this._validatePath(this.EVENTS.FINDCHAT, { user, chatId })
 					.then(() => {
 						return this.model('chat').findByMember(chatId, user)
 					})

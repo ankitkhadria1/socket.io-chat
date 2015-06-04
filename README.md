@@ -54,8 +54,10 @@ chatClient.on('authenticate', function (socket, data, next) {
     `Optional system messages (add/remove member, change title)`
 * changeTitle
     `On change title of chat`
-* findLast/findFrom/findAt
+* findMessagesLast/findMessagesFrom/findMessagesAt
     `On find messages of chat`
+* findChats/findChat
+    `On find chat(s)`
     
 ## Validate
 
@@ -116,6 +118,12 @@ Access flags for the execution of operations by the performer
 * RECEIVER
     Not used yet
 
+Add custom flag:
+
+client.action.addValidator(someFlag, function (options) {
+    return options.chat.creatorId.equals(someId);
+});
+
 > Each message have array of receivers. It means, after leave or remove user from chat, this user can read messages 
 > where he was the receiver.
 
@@ -131,9 +139,11 @@ Access flags for the execution of operations by the performer
 * changeTitle(chat, title, performer = null, flag = FLAGS.MEMBER)
 * leave(chat, performer, flag = FLAGS.MEMBER)
 * newSystemMessage(chat, data)
-* messagesFindLast(chatId, user, count, flag = FLAGS.RECEIVER) `flag not used`
-* messagesFindFrom(chatId, messageId, user, count, flag = FLAGS.RECEIVER) `flag not used`
-* messagesFindAt(chatId, messageId, user, count, flag = FLAGS.RECEIVER) `flag not used`
+* findLastMessages(chatId, user, count, flag = FLAGS.RECEIVER) `flag not used`
+* findFromMessages(chatId, messageId, user, count, flag = FLAGS.RECEIVER) `flag not used`
+* findAtMessages(chatId, messageId, user, count, flag = FLAGS.RECEIVER) `flag not used`
+* findChats(user, count = 10)
+* findChatById(user, chatId)
 * destroy()
     `Close socket.io connection and remove all listeners from the client`
 * model(name)
