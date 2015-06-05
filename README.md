@@ -51,7 +51,7 @@ chatClient.on('authenticate', function (socket, data, next) {
 * newMessage
     `On add message in chat`
 * newSystemMessage
-    `Optional system messages (add/remove member, change title)`
+    `Optional system messages (add/remove/leave member, change title)`
 * changeTitle
     `On change title of chat`
 * findMessagesLast/findMessagesFrom/findMessagesAt
@@ -124,6 +124,8 @@ client.action.addValidator(someFlag, function (options) {
     return options.chat.creatorId.equals(someId);
 });
 
+> FLAGS.AUTHOR, FLAGS.MEMBER, FLAGS.OTHER have numbers 1,2,3,4 respectively
+
 > Each message have array of receivers. It means, after leave or remove user from chat, this user can read messages 
 > where he was the receiver.
 
@@ -153,6 +155,21 @@ client.action.addValidator(someFlag, function (options) {
     `Return list of event names`
 * set eventNames(names)
     `Set event names`
+* socket.emitResult.transform(data, next)
+    `Transform socket result answer`
+    ```javascript
+        client.socket.emitResult.transform = function (data, next) {
+            delete data.chatId;
+            next(data);
+        }    
+    ``` 
+* socket.emitError.transform(data, next)
+    `Transform socket error answer`
+    ```javascript
+        client.socket.emitError.transform = function (data, next) {
+            next({ statusCode: 500, message: data.message });
+        }    
+    ```
     
 ## License
 MIT
