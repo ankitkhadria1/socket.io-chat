@@ -5,13 +5,15 @@
 		SchemaLoader = require('./schema'),
 		Model        = require('./model'),
 
-		schemaLoader = new SchemaLoader(),
-		schema       = schemaLoader.load(__dirname + '/../schema/chat.json');
+		schemaLoader = new SchemaLoader();
 
 	var sl = Array.prototype.slice;
 
 	module.exports = function (options) {
-		var collectionName;
+		var collectionName,
+			schema = schemaLoader.load(__dirname + '/../schema/chat.json');
+
+		console.log(schema);
 
 		collectionName = options.collection || 'chats';
 
