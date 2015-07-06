@@ -119,7 +119,7 @@
 						client.newSystemMessage(chat, { whoLeaved: member })
 							.then((message) => {
 								sockets.forEach((socket) => {
-									this.emitResult(socket, client.EVENTS.NEWMESSAGE, {
+									this.emitResult(socket, client.EVENTS.NEWSYSTEMMESSAGE, {
 										message: 'New system message', data: message.toJSON(), chatId: chat.get('_id')
 									});
 								});

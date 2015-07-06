@@ -371,6 +371,7 @@
 								done(error);
 							}
 
+							should(result).ok;
 							should(result.members.length).equal(lengthAfter);
 
 							done();

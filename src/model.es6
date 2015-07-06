@@ -3,7 +3,8 @@
 		db           = require('./db'),
 		Validator    = require('jsonschema').Validator,
 		EventEmitter = require('events').EventEmitter,
-		debug        = require('debug')('develop');
+		debug        = require('debug')('develop'),
+		schemaLoader = require('./schema');
 
 	var sl     = Array.prototype.slice;
 	var typeOf = function (object) {
@@ -14,10 +15,13 @@
 		constructor(props = {}) {
 			super();
 
+			this._id = new db.ObjectID();
+
 			_.each(this.defaults(), (value, key) => {
 				this[key] = props[key] ? props[key] : value;
 			});
 
+			this.__defaultAttrs = Object.keys(this.defaults());
 			this.__atomics = {};
 		}
 
@@ -119,7 +123,7 @@
 		}
 
 		toJSON() {
-			return _.clone(_.pick(this, Object.keys(this.defaults())));
+			return _.clone(_.pick(this, this.__defaultAttrs));
 		}
 
 		set(key, value) {
@@ -129,7 +133,7 @@
 				});
 			}
 
-			if (~Object.keys(this.defaults()).indexOf(key)) {
+			if (~this.__defaultAttrs.indexOf(key)) {
 				this[key] = value;
 
 				if (~['Number', 'String', 'Data', 'Boolean', 'Object', 'Null'].indexOf(typeOf(value))) {
@@ -141,7 +145,7 @@
 		}
 
 		get(key) {
-			if (~Object.keys(this.defaults()).indexOf(key)) {
+			if (~this.__defaultAttrs.indexOf(key)) {
 				return this[key];
 			}
 		}

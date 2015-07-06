@@ -78,8 +78,15 @@
 			this.__members = new Members();
 			this.__rooms   = new Rooms();
 
-			this.__models.chat    = Chat({ collection: collectionChat });
-			this.__models.message = Message({ collection: collectionChatMessages });
+			this.__models.chat    = Chat({
+				collection: collectionChat,
+				schema: options.schemaChat || undefined
+			});
+
+			this.__models.message = Message({
+				collection: collectionChatMessages,
+				schema: options.schemaMessage || undefined
+			});
 
 			this.io = io = IO(server, { maxHttpBufferSize: 1000 });
 
@@ -354,6 +361,7 @@
 			message.setChat(chat);
 			message.setAuthor(performer);
 			message.setReceivers(chat.members);
+			message.addAttachments(messageData.files);
 
 			return new Promise((resolve, reject) => {
 				this._validatePath(this.EVENTS.NEWMESSAGE, { chat, message, performer, flag })

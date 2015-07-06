@@ -170,6 +170,6 @@ client.action.addValidator(someFlag, function (options) {
             next({ statusCode: 500, message: data.message });
         }    
     ```
-    
+
 ## License
 MIT

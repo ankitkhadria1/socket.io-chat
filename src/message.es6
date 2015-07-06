@@ -2,33 +2,36 @@
 	"use strict";
 
 	var _            = require('underscore'),
-	    util         = require('util'),
-	    db           = require('./db'),
-	    Model        = require('./model'),
-	    SchemaLoader = require('./schema'),
-	    FLAGS        = require('./flags'),
+		util         = require('util'),
+		db           = require('./db'),
+		Model        = require('./model'),
+		SchemaLoader = require('./schema'),
+		FLAGS        = require('./flags'),
 
-	    schemaLoader = new SchemaLoader(),
-	    schema       = schemaLoader.load(__dirname + '/../schema/message.json');
+		schemaLoader = new SchemaLoader();
 
 	module.exports = function (options) {
-		var collectionName;
+		var collectionName = 'chats_messages',
+			schema         = schemaLoader.load(__dirname + '/../schema/message.json');
 
-		collectionName = options.collection || 'chats_messages';
+		options.collection && (collectionName = options.collection);
+		options.schema && _.extend(schema, options.schema);
 
 		class Message extends Model {
 			defaults() {
-				return {
-					_id:         null,
-					chatId:      null,
-					text:        '',
-					createdAt:   null,
-					authorId:    null,
-					receivers:   [],
-					attachments: [],
-					type:        'user',
-					system:      {}
-				};
+				return schemaLoader.defaults(schema);
+			}
+
+			constructor(props) {
+				super(props);
+
+				this.setSchema(schema);
+
+				this.on('beforeValidate', function () {
+					if (!this.get('createdAt')) {
+						this.set('createdAt', new Date());
+					}
+				});
 			}
 
 			static stream(criteria = {}, streamOptions = {}) {
@@ -39,17 +42,6 @@
 					.stream(streamOptions);
 
 				return cursor;
-			}
-
-			constructor(props) {
-				super(props);
-				this.setSchema(schema);
-
-				this.on('beforeValidate', function () {
-					if (!this.get('createdAt')) {
-						this.set('createdAt', new Date());
-					}
-				});
 			}
 
 			setAuthor(id) {
@@ -85,15 +77,21 @@
 				this.set('system', data);
 			}
 
+			addAttachments(files = {}) {
+				_.each(files, function (file) {
+
+				})
+			}
+
 			collection() {
 				return collectionName;
 			}
 
 			static findLast(dataChatId, user, count, flag = FLAGS.RECEIVER) {
 				var chatId = db.ObjectId(dataChatId),
-				    userId = db.ObjectId(user),
-				    limit  = Math.abs(count) > 50 ? 50 : (Math.abs(count) || 10),
-				    query  = { chatId: chatId };
+					userId = db.ObjectId(user),
+					limit  = Math.abs(count) > 50 ? 50 : (Math.abs(count) || 10),
+					query  = { chatId: chatId };
 
 				switch (flag) {
 					case FLAGS.AUTHOR:
@@ -122,10 +120,10 @@
 
 			static findFrom(dataChatId, dataMessageId, user, count, flag = FLAGS.RECEIVER) {
 				var chatId    = db.ObjectId(dataChatId),
-				    messageId = db.ObjectId(dataMessageId),
-				    userId    = db.ObjectId(user),
-				    limit     = Math.abs(count) > 50 ? 50 : (Math.abs(count) || 10),
-				    query     = { _id: { $gt: messageId }, chatId: chatId, receivers: userId };
+					messageId = db.ObjectId(dataMessageId),
+					userId    = db.ObjectId(user),
+					limit     = Math.abs(count) > 50 ? 50 : (Math.abs(count) || 10),
+					query     = { _id: { $gt: messageId }, chatId: chatId, receivers: userId };
 
 				switch (flag) {
 					case FLAGS.AUTHOR:
@@ -154,10 +152,10 @@
 
 			static findAt(dataChatId, dataMessageId, user, count, flag = FLAGS.RECEIVER) {
 				var chatId    = db.ObjectId(dataChatId),
-				    messageId = db.ObjectId(dataMessageId),
-				    userId    = db.ObjectId(user),
-				    limit     = Math.abs(count) > 50 ? 50 : (Math.abs(count) || 10),
-				    query     = { _id: { $lt: messageId }, chatId: chatId };
+					messageId = db.ObjectId(dataMessageId),
+					userId    = db.ObjectId(user),
+					limit     = Math.abs(count) > 50 ? 50 : (Math.abs(count) || 10),
+					query     = { _id: { $lt: messageId }, chatId: chatId };
 
 				switch (flag) {
 					case FLAGS.AUTHOR:

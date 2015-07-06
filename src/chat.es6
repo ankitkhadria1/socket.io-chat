@@ -1,6 +1,7 @@
 (function () {
 	var _            = require('underscore'),
 		util         = require('util'),
+		debug        = require('debug')('develop'),
 		db           = require('./db'),
 		SchemaLoader = require('./schema'),
 		Model        = require('./model'),
@@ -9,30 +10,16 @@
 
 	var sl = Array.prototype.slice;
 
-	module.exports = function (options) {
-		var collectionName,
-			schema = schemaLoader.load(__dirname + '/../schema/chat.json');
+	module.exports = function (options = {}) {
+		var collectionName = 'chats',
+			schema         = schemaLoader.load(__dirname + '/../schema/chat.json');
 
-		console.log(schema);
-
-		collectionName = options.collection || 'chats';
+		options.collection && (collectionName = options.collection);
+		options.schema && _.extend(schema, options.schema);
 
 		class Chat extends Model {
 			defaults() {
-				return {
-					_id:            null,
-					name:           '',
-					title:          '',
-					creatorId:      null,
-					members:        [],
-					createdAt:      null,
-					type:           'private',
-					systemMessages: {
-						addMember:    false,
-						removeMember: false,
-						changeTitle:  false
-					}
-				}
+				return schemaLoader.defaults(schema);
 			}
 
 			constructor(props) {
@@ -41,10 +28,6 @@
 				this.setSchema(schema);
 
 				this.on('beforeValidate', function () {
-					if (!this.get('createdAt')) {
-						this.set('createdAt', new Date());
-					}
-
 					this.set('type', this.determinateType());
 				});
 			}
