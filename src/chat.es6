@@ -20,7 +20,6 @@
 
 		class Chat extends Model {
 			defaults() {
-				console.log(schema);
 				return schemaLoader.defaults(schema);
 			}
 
