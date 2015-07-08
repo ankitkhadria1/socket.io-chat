@@ -103,6 +103,8 @@
 				});
 
 				it('success', function (done) {
+					var promiseCreate = Q.defer(), promiseAddMember = Q.defer();
+
 					socket.once('create', function (response) {
 						expect(response).toBeTruthy();
 						expect(response.error).not.toBeDefined();
@@ -111,8 +113,28 @@
 						expect(response.result.message).toBeDefined();
 						expect(response.result.data).toBeDefined();
 						expect(response.result.data).toBeTruthy();
-						done();
+
+						promiseCreate.resolve();
 					});
+
+					socket.once('addMember', function (response) {
+						expect(response).toBeTruthy();
+						expect(response.error).not.toBeDefined();
+
+						expect(response.result).toBeDefined();
+						expect(response.result.message).toBeDefined();
+						expect(response.result.data).toBeDefined();
+						expect(response.result.data).toBeTruthy();
+
+						promiseAddMember.resolve();
+					});
+
+					Q.all([
+						promiseCreate,
+						promiseAddMember
+					]).then(function () {
+						done();
+					}).catch(done);
 
 					socket.emit('create', { name: 'first chat' });
 				});

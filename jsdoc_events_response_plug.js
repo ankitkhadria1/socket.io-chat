@@ -27,16 +27,6 @@
 	module.exports.create = function () {};
 
 	/**
-	 * @method enter
-	 *
-	 * @desc Receive all members of chat, when it created,
-	 *
-	 * @param {String} message
-	 * @param {Object} data - chat object
-	 */
-	module.exports.enter = function () {};
-
-	/**
 	 * @method leave
 	 *
 	 * @desc Receive all members of chat, when member leaves from chat.
@@ -63,7 +53,7 @@
 	/**
 	 * @method addMember
 	 *
-	 * @desc Receive all members of chat, when member added to chat.
+	 * @desc Receive all members of chat, when member added to chat or chat create.
 	 *
 	 * @param {String} message
 	 * @param {Object} data - member

@@ -104,6 +104,17 @@ new chat.Client(server, options = {})
         ...
     }
 ```
+* options.schemaChat - json schema to extend the base chat schema
+* options.schemaMessage - json schema to extend the base messages schema
+```javascript
+        schemaChat: {
+            properties: {
+                foo: {
+                    "type": "string"
+                }
+            }
+        }
+```
 
 ## FLAGS
 
@@ -155,7 +166,7 @@ client.action.addValidator(someFlag, function (options) {
     `Return list of event names`
 * set eventNames(names)
     `Set event names`
-* socket.emitResult.transform(data, next)
+* socket.emitResult.transform(eventdata, next)
     `Transform socket result answer`
     ```javascript
         client.socket.emitResult.transform = function (data, next) {
@@ -170,6 +181,25 @@ client.action.addValidator(someFlag, function (options) {
             next({ statusCode: 500, message: data.message });
         }    
     ```
+* socket.emitResult.transformOn(eventName, callback)
+    ```javascript
+        client.socket.emitResult.transformOn('create', function (data, next) {
+            next(data);
+        });
+    ```
+* socket.emitError.transformOn(eventName, callback)
+    ```javascript
+        client.socket.emitError.transformOn('create', function (data, next) {
+            next(data);
+        });
+    ```
+
+## Changelog
+
+* 0.0.6
+ * added socket.emitError.transformOn
+ * extend json schema (see options.schemaMessage)
+ * remove `enter` event on create chat. (Replaced by `addMember`)
 
 ## License
 MIT

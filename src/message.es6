@@ -7,6 +7,7 @@
 		Model        = require('./model'),
 		SchemaLoader = require('./schema'),
 		FLAGS        = require('./flags'),
+		extend		 = require('extend'),
 
 		schemaLoader = new SchemaLoader();
 
@@ -15,7 +16,7 @@
 			schema         = schemaLoader.load(__dirname + '/../schema/message.json');
 
 		options.collection && (collectionName = options.collection);
-		options.schema && _.extend(schema, options.schema);
+		options.schema && (schema = extend(true, schema, options.schema));
 
 		class Message extends Model {
 			defaults() {

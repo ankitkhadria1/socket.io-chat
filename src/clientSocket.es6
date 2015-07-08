@@ -9,6 +9,7 @@
 			case 'client':
 				return error.message;
 			default:
+				// TODO: debug(error.stack);
 				return 'Unknown error';
 		}
 	}
@@ -39,7 +40,7 @@
 	}
 
 	class ClientSocket {
-		constructor () {
+		constructor() {
 			this.emitResult.transform = function (data, next) {
 				next(data);
 			};
@@ -47,17 +48,89 @@
 			this.emitError.transform = function (data, next) {
 				next(data);
 			};
+
+			this.emitError.transformOn = (event, cb) => {
+				if (!this.emitError.__transforms) {
+					this.emitError.__transforms = {}
+				}
+
+				if (!this.emitError.__transforms[event]) {
+					this.emitError.__transforms[event] = [];
+				}
+
+				this.emitError.__transforms[event].push(cb);
+
+				return this.emitResult;
+			};
+
+			this.emitResult.transformOn = (event, cb) => {
+				if (!this.emitResult.__transforms) {
+					this.emitResult.__transforms = {}
+				}
+
+				if (!this.emitResult.__transforms[event]) {
+					this.emitResult.__transforms[event] = [];
+				}
+
+				this.emitResult.__transforms[event].push(cb);
+
+				return this.emitResult;
+			};
 		}
 
-		emitError (socket, event, data) {
-			this.emitError.transform(data, function (data) {
-				socket.emit(event, { error: data });
+		emitError(socket, event, data) {
+			var index      = 0,
+				transforms = this.emitError.__transforms || {},
+				transformCb;
+
+			function nextTransform(data) {
+				transformCb = transforms[event] ? transforms[event][index] : null;
+
+				if (transformCb) {
+					transformCb(data, function (data) {
+						index++;
+
+						if (transforms.length === index) {
+							socket.emit(event, { error: data });
+						} else {
+							nextTransform(data);
+						}
+					});
+				} else {
+					socket.emit(event, { error: data });
+				}
+			}
+
+			this.emitError.transform(data, (data) => {
+				nextTransform(data);
 			});
 		}
 
-		emitResult (socket, event, data) {
-			this.emitResult.transform(data, function (data) {
-				socket.emit(event, { result: data });
+		emitResult(socket, event, data) {
+			var index      = 0,
+				transforms = this.emitResult.__transforms || {},
+				transformCb;
+
+			function nextTransform(data) {
+				transformCb = transforms[event] ? transforms[event][index] : null;
+
+				if (transformCb) {
+					transformCb(data, function (data) {
+						index++;
+
+						if (transforms.length === index) {
+							socket.emit(event, { result: data });
+						} else {
+							nextTransform(data);
+						}
+					});
+				} else {
+					socket.emit(event, { result: data });
+				}
+			}
+
+			this.emitResult.transform(data, (data) => {
+				nextTransform(data);
 			});
 		}
 
@@ -89,7 +162,10 @@
 
 					client.__members.get(chat.get('members'))
 						.forEach((socket) => {
-							this.emitResult(socket, client.EVENTS.ENTER, { message: 'Added to chat', data: chat.toJSON() });
+							this.emitResult(socket, client.EVENTS.ADDMEMBER, {
+								message: 'Added to chat',
+								data:    chat.toJSON()
+							});
 						});
 
 				})

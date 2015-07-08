@@ -5,6 +5,7 @@
 		db           = require('./db'),
 		SchemaLoader = require('./schema'),
 		Model        = require('./model'),
+		extend		 = require('extend'),
 
 		schemaLoader = new SchemaLoader();
 
@@ -15,10 +16,11 @@
 			schema         = schemaLoader.load(__dirname + '/../schema/chat.json');
 
 		options.collection && (collectionName = options.collection);
-		options.schema && _.extend(schema, options.schema);
+		options.schema && (schema = extend(true, schema, options.schema));
 
 		class Chat extends Model {
 			defaults() {
+				console.log(schema);
 				return schemaLoader.defaults(schema);
 			}
 

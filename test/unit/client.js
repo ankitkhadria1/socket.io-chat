@@ -10,12 +10,6 @@
 	    http        = require('http'),
 	    faker       = require('faker'),
 	    server,
-	    describe    = global.describe,
-	    it          = global.it,
-	    before      = global.before,
-	    after       = global.after,
-	    beforeEach  = global.beforeEach,
-	    afterEach   = global.afterEach,
 	    prefixName  = 'testName-',
 	    debug       = require('debug')('test');
 
