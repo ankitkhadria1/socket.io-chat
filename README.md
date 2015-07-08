@@ -200,6 +200,7 @@ client.action.addValidator(someFlag, function (options) {
  * added socket.emitError.transformOn
  * extend json schema (see options.schemaMessage)
  * remove `enter` event on create chat. (Replaced by `addMember`)
+ * fix events findMessagesLast/findMessagesFrom to use emitResult
 
 ## License
 MIT

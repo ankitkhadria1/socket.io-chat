@@ -347,11 +347,9 @@
 		onFindMessagesLast(client, socket, data = {}) {
 			client.findLastMessages(data.chatId, socket.user, data.count)
 				.then((messages) => {
-					socket.emit(client.EVENTS.FINDMESSAGESLAST, {
-						result: {
-							chatId: data.chatId,
-							data:   messages
-						}
+					this.emitResult(socket, client.EVENTS.FINDMESSAGESLAST, {
+						chatId: data.chatId,
+						data:   messages
 					})
 				})
 				.catch((error) => {
@@ -362,11 +360,9 @@
 		onFindMessagesFrom(client, socket, data = {}) {
 			client.findFromMessages(data.chatId, data.messageId, socket.user, data.count)
 				.then((messages) => {
-					socket.emit(client.EVENTS.FINDMESSAGESFROM, {
-						result: {
-							chatId: data.chatId,
-							data:   messages
-						}
+					this.emitResult(socket, client.EVENTS.FINDMESSAGESFROM, {
+						chatId: data.chatId,
+						data:   messages
 					});
 				})
 				.catch((error) => {
