@@ -1,7 +1,8 @@
 (function () {
 	"use strict";
 
-	var ClientError = require('./error');
+	var ClientError = require('./error'),
+		debug = require('debug')('develop');
 
 	function catchErrorMessage(error) {
 		switch (error.type) {
@@ -10,6 +11,7 @@
 				return error.message;
 			default:
 				// TODO: debug(error.stack);
+				debug(error.stack);
 				return 'Unknown error';
 		}
 	}
@@ -147,6 +149,7 @@
 				client.__members.add(socket.user, socket);
 
 				this.emitResult(socket, 'login', { user: socket.user });
+				this.emitResult(socket, 'authenticate', { user: socket.user });
 			});
 		}
 
@@ -162,8 +165,8 @@
 
 					client.__members.get(chat.get('members'))
 						.forEach((socket) => {
-							this.emitResult(socket, client.EVENTS.ADDMEMBER, {
-								message: 'Added to chat',
+							this.emitResult(socket, client.EVENTS.JOIN, {
+								message: 'Join to chat',
 								data:    chat.toJSON()
 							});
 						});
@@ -234,7 +237,6 @@
 					if (countBefore === countAfter) {
 						return;
 					}
-
 
 					let receivers = chat.get('members'),
 						sockets   = client.__members.get(receivers);
@@ -345,7 +347,9 @@
 		}
 
 		onFindMessagesLast(client, socket, data = {}) {
-			client.findLastMessages(data.chatId, socket.user, data.count)
+			client.findLastMessages(data.chatId, socket.user, data.limit, FLAGS.RECEIVER, {
+				filter: data.filter, sort: data.sort, limit: data.limit, next: data.next, prev: data.prev
+			})
 				.then((messages) => {
 					this.emitResult(socket, client.EVENTS.FINDMESSAGESLAST, {
 						chatId: data.chatId,
@@ -358,7 +362,9 @@
 		}
 
 		onFindMessagesFrom(client, socket, data = {}) {
-			client.findFromMessages(data.chatId, data.messageId, socket.user, data.count)
+			client.findFromMessages(data.chatId, data.messageId, socket.user, data.limit, FLAGS.RECEIVER, {
+				filter: data.filter, sort: data.sort, limit: data.limit, next: data.next, prev: data.prev
+			})
 				.then((messages) => {
 					this.emitResult(socket, client.EVENTS.FINDMESSAGESFROM, {
 						chatId: data.chatId,
@@ -371,7 +377,9 @@
 		}
 
 		onFindMessagesAt(client, socket, data = {}) {
-			client.findAtMessages(data.chatId, data.messageId, socket.user, data.count)
+			client.findAtMessages(data.chatId, data.messageId, socket.user, data.limit, FLAGS.RECEIVER, {
+				filter: data.filter, sort: data.sort, limit: data.limit, next: data.next, prev: data.prev
+			})
 				.then((messages) => {
 					this.emitResult(socket, client.EVENTS.FINDMESSAGESAT, { chatId: data.chatId, data: messages });
 				})
@@ -391,7 +399,9 @@
 		}
 
 		onFindChats(client, socket, data = {}) {
-			client.findChats(socket.user, data.count)
+			client.findChats(socket.user, data.limit, {
+				filter: data.filter, sort: data.sort, limit: data.limit, next: data.next, prev: data.prev
+			})
 				.then((chats) => {
 					this.emitResult(socket, client.EVENTS.FINDCHATS, { data: chats });
 				})

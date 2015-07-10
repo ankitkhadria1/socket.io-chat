@@ -103,7 +103,8 @@
 				});
 
 				it('success', function (done) {
-					var promiseCreate = Q.defer(), promiseAddMember = Q.defer();
+					var promiseCreate = Q.defer();
+					var promiseJoinMember = Q.defer();
 
 					socket.once('create', function (response) {
 						expect(response).toBeTruthy();
@@ -117,7 +118,7 @@
 						promiseCreate.resolve();
 					});
 
-					socket.once('addMember', function (response) {
+					socket.once('join', function (response) {
 						expect(response).toBeTruthy();
 						expect(response.error).not.toBeDefined();
 
@@ -126,12 +127,12 @@
 						expect(response.result.data).toBeDefined();
 						expect(response.result.data).toBeTruthy();
 
-						promiseAddMember.resolve();
+						promiseJoinMember.resolve();
 					});
 
 					Q.all([
-						promiseCreate,
-						promiseAddMember
+						promiseCreate.promise,
+						promiseJoinMember.promise
 					]).then(function () {
 						done();
 					}).catch(done);
@@ -1101,7 +1102,6 @@
 				});
 			});
 		});
-
 	});
 
 }(this));

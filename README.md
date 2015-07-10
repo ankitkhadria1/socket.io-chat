@@ -36,33 +36,69 @@ chatClient.on('authenticate', function (socket, data, next) {
 
 ## Events
 
-* authenticate
-    `On authenticate user`
-* create
-    `On create new chat`
-* enter
-    `On enter in chat`
-* leave
-    `On leave from chat`
-* addMember
-    `On add member in chat`
-* removeMember
-    `On remove member from chat`
-* newMessage
-    `On add message in chat`
-* newSystemMessage
-    `Optional system messages (add/remove/leave member, change title)`
-* changeTitle
-    `On change title of chat`
-* findMessagesLast/findMessagesFrom/findMessagesAt
-    `On find messages of chat`
-* findChats/findChat
-    `On find chat(s)`
+* authenticate `On authenticate user`
+* create `On create new chat`
+* leave `On leave from chat`
+* addMember `On add member in chat`
+* removeMember `On remove member from chat`
+* newMessage `On add message in chat`
+* newSystemMessage `Optional system messages (add/remove/leave member, change title)`
+* changeTitle `On change title of chat`
+* findMessagesLast/findMessagesFrom/findMessagesAt `On find messages of chat`
+* findChats/findChat `On find chat(s)`
+
+ ## Client events
+
+ * login/authenticate
+    * arguments {}
+    * returns { message, user }
+ * create
+    * arguments { data }
+    * returns   { message, data }
+ * join
+    * returns { message, data }
+ * leave
+    * arguments { chatId }
+    * returns   { message, data, chatId }
+ * addMember
+    * arguments { chatId, member }
+    * returns   { message, data, chatId }
+ * removeMember
+    * arguments { chatId, member }
+    * returns   { message, data, chatId }
+ * newMessage
+    * arguments { chatId, text }
+    * returns   { message, data, chatId }
+ * newSystemMessage
+    * returns   { message, data, chatId }
+ * changeTitle
+    * arguments { chatId, title }
+    * returns   { message, data, chatId }
+ * findMessagesLast
+    * arguments { chatId, [filter], [sort], [limit], [prev], [next] }
+        1. filter - filter messages by filed. { authorId: 111 }
+        2. sort - sort data by field. createdAt: -1
+        3. limit - limit of the data
+        4. prev - the _id field. return documents, before the specified _id.
+        5. next - the _id field. return documents, after the specified _id.
+    * returns   { data, chatId }
+ * findMessagesFrom
+    * arguments { chatId, messageId, [filter], [sort], [limit], [prev], [next] }
+    * returns   { data, chatId }
+ * findMessagesAt
+    * arguments { chatId, messageId, [filter], [sort], [limit], [prev], [next] }
+    * returns   { data, chatId }
+ * findChats
+    * arguments { [filter], [sort], [limit], [prev], [next] }
+    * returns   { data }
+ * findChat
+    * arguments { chatId }
+    * returns   { data }
     
 ## Validate
 
 ```javascript
-chatClient.validate('newMessage', function (socket, options, next) {
+chatClient.validate('newMessage', function (options, next) {
     dbConnect.getCollections('users')
         .findById(options.performer, function (err, doc) {
             if (err) return next(err);
@@ -99,7 +135,6 @@ new chat.Client(server, options = {})
     {
         AUTHENTICATE: 'foo',
         CREATE: 'create chat',
-        ENTER: 'enter chat',
         LEAVE: 'leave from chat',
         ...
     }
@@ -152,11 +187,11 @@ client.action.addValidator(someFlag, function (options) {
 * changeTitle(chat, title, performer = null, flag = FLAGS.MEMBER)
 * leave(chat, performer, flag = FLAGS.MEMBER)
 * newSystemMessage(chat, data)
-* findLastMessages(chatId, user, count, flag = FLAGS.RECEIVER) `flag not used`
-* findFromMessages(chatId, messageId, user, count, flag = FLAGS.RECEIVER) `flag not used`
-* findAtMessages(chatId, messageId, user, count, flag = FLAGS.RECEIVER) `flag not used`
-* findChats(user, count = 10)
-* findChatById(user, chatId)
+* findLastMessages(chatId, user, limit, flag = FLAGS.RECEIVER, criteria = {}) `flag not used`
+* findFromMessages(chatId, messageId, user, limit, flag = FLAGS.RECEIVER, criteria = {}) `flag not used`
+* findAtMessages(chatId, messageId, user, limit, flag = FLAGS.RECEIVER, criteria = {}) `flag not used`
+* findChats(user, limit = 10, criteria = {})
+* findChatById(user, chatId, criteria = {})
 * destroy()
     `Close socket.io connection and remove all listeners from the client`
 * model(name)
@@ -195,6 +230,12 @@ client.action.addValidator(someFlag, function (options) {
     ```
 
 ## Changelog
+
+* 0.0.7
+ * replaced `addMember` to `join` after `create` event
+ * added params `filter`, `sort`, `limit`, `prev`, `next` in find* methods
+ * `count` field in `findMessagesLast`, `findMessagesFrom`, `findMessagesAt` renamed to `limit`
+ * fixed description README
 
 * 0.0.6
  * added socket.emitError.transformOn

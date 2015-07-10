@@ -79,32 +79,44 @@
 	/**
 	 * @method findMessagesLast
 	 *
-	 * @desc Find last @count messages of chat
+	 * @desc Find last @limit messages of chat
 	 *
 	 * @param {ObjectId} chatId
-	 * @param {Number} count
+	 * @param {Object} [filter] - key and value of message (createdAt, authorId, etc.) { text: 'some text' }
+	 * @param {Object} [sort] - { authorId: -1, createdAt: 1 }, positive - asc, negative - desc
+	 * @param {Number} [limit]
+	 * @param {ObjectId} [next] - return documents, before the specified _id
+	 * @param {ObjectId} [prev] - return documents, after the specified _id
 	 */
 	module.exports.findMessagesLast = function () {};
 
 	/**
 	 * @method findMessagesFrom
 	 *
-	 * @desc Find @count messages, starting from @messageId. Search down. (for load not received messages)
+	 * @desc Find @limit messages, starting from @messageId. Search down. (for load not received messages)
 	 *
 	 * @param {ObjectId} chatId
 	 * @param {ObjectId} messageId
-	 * @param {Number} count
+	 * @param {Object} [filter] - key and value of message (createdAt, authorId, etc.) { text: 'some text' }
+	 * @param {Object} [sort] - { authorId: -1, createdAt: 1 }, positive - asc, negative - desc
+	 * @param {Number} [limit]
+	 * @param {ObjectId} [next] - return documents, before the specified _id
+	 * @param {ObjectId} [prev] - return documents, after the specified _id
 	 */
 	module.exports.findMessagesFrom = function () {};
 
 	/**
 	 * @method findMessagesAt
 	 *
-	 * @desc Find @count messages, starting from @messageId. Search up. (for history loading)
+	 * @desc Find @limit messages, starting from @messageId. Search up. (for history loading)
 	 *
 	 * @param {ObjectId} chatId
 	 * @param {ObjectId} messageId
-	 * @param {Number} count
+	 * @param {Object} [filter] - key and value of message (createdAt, authorId, etc.) { text: 'some text' }
+	 * @param {Object} [sort] - { authorId: -1, createdAt: 1 }, positive - asc, negative - desc
+	 * @param {Number} [limit]
+	 * @param {ObjectId} [next] - return documents, before the specified _id
+	 * @param {ObjectId} [prev] - return documents, after the specified _id
 	 */
 	module.exports.findMessagesAt = function () {};
 
@@ -113,7 +125,11 @@
 	 *
 	 * @desc Find all our chats.
 	 *
-	 * @param {Number} count - not used yet
+	 * @param {Object} [filter] - key and value of message (createdAt, authorId, etc.) { text: 'some text' }
+	 * @param {Object} [sort] - positive - asc, negative - desc
+	 * @param {Number} [limit]
+	 * @param {ObjectId} [next] - return documents, before the specified _id
+	 * @param {ObjectId} [prev] - return documents, after the specified _id
 	 */
 	module.exports.findChats = function () {};
 

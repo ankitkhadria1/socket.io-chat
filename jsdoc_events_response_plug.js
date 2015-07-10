@@ -7,7 +7,7 @@
 	module.exports = {};
 
 	/**
-	 * @method login
+	 * @method login/authenticate
 	 *
 	 * @desc Response to the `authenticate` event.
 	 *
@@ -25,6 +25,17 @@
 	 * @param {Object} data - chat object
 	 */
 	module.exports.create = function () {};
+
+	/**
+	 * @method join
+	 *
+	 * @desc Receive all members on create new chat
+	 *
+	 * @param {String} message
+	 * @param {Object} data - chat json
+	 *
+	 */
+	module.exports.join = function () {};
 
 	/**
 	 * @method leave

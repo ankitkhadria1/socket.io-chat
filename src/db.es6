@@ -19,6 +19,6 @@ module.exports = {
 	ObjectId: function (id) {
 		return ObjectID.isValid(id)
 			? ObjectID(id)
-			: undefined;
+			: null;
 	}
 };

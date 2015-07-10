@@ -7,6 +7,7 @@
     "start": "node server.js",
     "test": "mocha --harmony 'test/unit/**/*.js'",
     "test-unit-client": "./node_modules/.bin/mocha --require should --reporter spec test/unit/client.js",
+    "test-unit-query-resolver": "./node_modules/.bin/mocha --require should --reporter spec test/unit/queryResolver.js",
     "test-ci": "./node_modules/babel/bin/babel-node node_modules/.bin/isparta cover _mocha --report html -- --recursive --reporter spec ./test/unit/**/*.js"
   },
   "repository": {

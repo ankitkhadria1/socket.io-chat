@@ -1,15 +1,16 @@
 (function () {
 	"use strict";
 
-	var _            = require('underscore'),
-		util         = require('util'),
-		db           = require('./db'),
-		Model        = require('./model'),
-		SchemaLoader = require('./schema'),
-		FLAGS        = require('./flags'),
-		extend		 = require('extend'),
+	var _             = require('underscore'),
+		util          = require('util'),
+		db            = require('./db'),
+		Model         = require('./model'),
+		SchemaLoader  = require('./schema'),
+		FLAGS         = require('./flags'),
+		extend        = require('extend'),
+		QueryResolver = require('./queryResolver'),
 
-		schemaLoader = new SchemaLoader();
+		schemaLoader  = new SchemaLoader();
 
 	module.exports = function (options) {
 		var collectionName = 'chats_messages',
@@ -88,11 +89,11 @@
 				return collectionName;
 			}
 
-			static findLast(dataChatId, user, count, flag = FLAGS.RECEIVER) {
-				var chatId = db.ObjectId(dataChatId),
-					userId = db.ObjectId(user),
-					limit  = Math.abs(count) > 50 ? 50 : (Math.abs(count) || 10),
-					query  = { chatId: chatId };
+			static findLast(dataChatId, user, count, flag = FLAGS.RECEIVER, criteria = {}) {
+				var chatId        = db.ObjectId(dataChatId),
+					userId        = db.ObjectId(user),
+					query         = { chatId: chatId },
+					queryResolver = new QueryResolver();
 
 				switch (flag) {
 					case FLAGS.AUTHOR:
@@ -103,28 +104,23 @@
 						break;
 				}
 
-				return new Promise((resolve, reject) => {
-					db.getConnect(function (connect) {
-						connect.collection(collectionName)
-							.find(query)
-							.limit(limit)
-							.toArray(function (error, result) {
-								if (error) {
-									return reject(error);
-								}
+				queryResolver.setSchema(schema);
 
-								resolve(result);
-							})
-					});
-				});
+				return queryResolver
+					.collection(collectionName)
+					.setQuery(query, criteria.filter)
+					.setSort({}, criteria.sort)
+					.setLimit(criteria.limit || count)
+					.setNext(criteria.next)
+					.find();
 			}
 
-			static findFrom(dataChatId, dataMessageId, user, count, flag = FLAGS.RECEIVER) {
-				var chatId    = db.ObjectId(dataChatId),
-					messageId = db.ObjectId(dataMessageId),
-					userId    = db.ObjectId(user),
-					limit     = Math.abs(count) > 50 ? 50 : (Math.abs(count) || 10),
-					query     = { _id: { $gt: messageId }, chatId: chatId, receivers: userId };
+			static findFrom(dataChatId, dataMessageId, user, count, flag = FLAGS.RECEIVER, criteria = {}) {
+				var queryResolver = new QueryResolver(),
+					chatId        = db.ObjectId(dataChatId),
+					messageId     = db.ObjectId(dataMessageId),
+					userId        = db.ObjectId(user),
+					query         = { _id: { $gt: messageId }, chatId: chatId, receivers: userId };
 
 				switch (flag) {
 					case FLAGS.AUTHOR:
@@ -135,28 +131,22 @@
 						break;
 				}
 
-				return new Promise((resolve, reject) => {
-					db.getConnect(function (connect) {
-						connect.collection(collectionName)
-							.find(query)
-							.limit(limit)
-							.toArray(function (error, result) {
-								if (error) {
-									return reject(error);
-								}
+				queryResolver.setSchema(schema);
 
-								resolve(result);
-							})
-					});
-				});
+				return queryResolver
+					.collection(collectionName)
+					.setQuery(query, criteria.filter)
+					.setSort({}, criteria.sort)
+					.setLimit(criteria.limit || count)
+					.find();
 			}
 
-			static findAt(dataChatId, dataMessageId, user, count, flag = FLAGS.RECEIVER) {
-				var chatId    = db.ObjectId(dataChatId),
-					messageId = db.ObjectId(dataMessageId),
-					userId    = db.ObjectId(user),
-					limit     = Math.abs(count) > 50 ? 50 : (Math.abs(count) || 10),
-					query     = { _id: { $lt: messageId }, chatId: chatId };
+			static findAt(dataChatId, dataMessageId, user, count, flag = FLAGS.RECEIVER, criteria = {}) {
+				var queryResolver = new QueryResolver(),
+					chatId        = db.ObjectId(dataChatId),
+					messageId     = db.ObjectId(dataMessageId),
+					userId        = db.ObjectId(user),
+					query         = { _id: { $lt: messageId }, chatId: chatId };
 
 				switch (flag) {
 					case FLAGS.AUTHOR:
@@ -167,20 +157,14 @@
 						break;
 				}
 
-				return new Promise((resolve, reject) => {
-					db.getConnect(function (connect) {
-						connect.collection(collectionName)
-							.find(query)
-							.limit(limit)
-							.toArray(function (error, result) {
-								if (error) {
-									return reject(error);
-								}
+				queryResolver.setSchema(schema);
 
-								resolve(result);
-							})
-					});
-				});
+				return queryResolver
+					.collection(collectionName)
+					.setQuery(query, criteria.filter)
+					.setSort({}, criteria.sort)
+					.setLimit(criteria.limit || count)
+					.find();
 			}
 
 		}

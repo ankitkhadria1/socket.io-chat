@@ -1,13 +1,14 @@
 (function () {
-	var _            = require('underscore'),
-		util         = require('util'),
-		debug        = require('debug')('develop'),
-		db           = require('./db'),
-		SchemaLoader = require('./schema'),
-		Model        = require('./model'),
-		extend		 = require('extend'),
+	var _             = require('underscore'),
+		util          = require('util'),
+		debug         = require('debug')('develop'),
+		db            = require('./db'),
+		SchemaLoader  = require('./schema'),
+		Model         = require('./model'),
+		extend        = require('extend'),
+		QueryResolver = require('./queryResolver'),
 
-		schemaLoader = new SchemaLoader();
+		schemaLoader  = new SchemaLoader();
 
 	var sl = Array.prototype.slice;
 
@@ -111,80 +112,81 @@
 				return null;
 			}
 
-			static findById(id) {
-				var chatId = db.ObjectId(id);
+			static findById(id, criteria = {}) {
+				var chatId        = db.ObjectId(id),
+					query,
+					queryResolver = new QueryResolver();
 
-				return new Promise((resolve, reject) => {
-					db.getConnect(function (connect) {
-						connect.collection(collectionName).findOne({ _id: chatId }, function (error, result) {
-							return error
-								? reject(error)
-								: result
-								? resolve(new Chat().set(result))
-								: resolve(result);
-						});
+				query = { _id: chatId };
+
+				queryResolver.setSchema(schema);
+
+				return queryResolver
+					.collection(collectionName)
+					.setQuery(query, criteria.filter)
+					.findOne()
+					.then(function (result) {
+						return result && new Chat().set(result);
 					});
-				});
 			}
 
-			static findByOwner(id, creatorId) {
-				var chatId, chatCreatorId, criteria;
+			static findByOwner(id, creatorId, criteria = {}) {
+				var chatId,
+					chatCreatorId,
+					query,
+					queryResolver = new QueryResolver();
 
 				chatId        = db.ObjectId(id);
 				chatCreatorId = db.ObjectId(creatorId);
 
-				criteria = { _id: chatId, creatorId: chatCreatorId };
+				query = { _id: chatId, creatorId: chatCreatorId };
+				queryResolver.setSchema(schema);
 
-				return new Promise((resolve, reject) => {
-					db.getConnect(function (connect) {
-						connect.collection(collectionName).findOne(criteria, function (error, result) {
-							return error
-								? reject(error)
-								: result
-								? resolve(new Chat().set(result))
-								: resolve(result);
-						});
+				return queryResolver
+					.collection(collectionName)
+					.setQuery(query, criteria.filter)
+					.findOne()
+					.then(function (result) {
+						return result && new Chat().set(result);
 					});
-				});
 			}
 
-			static findByMember(id, memberId) {
-				var chatId, chatMemberId, criteria;
+			static findByMember(id, memberId, criteria = {}) {
+				var chatId,
+					chatMemberId,
+					query,
+					queryResolver = new QueryResolver();
 
 				chatId       = db.ObjectId(id);
 				chatMemberId = db.ObjectId(memberId);
 
-				criteria = { _id: chatId, members: chatMemberId };
+				query = { _id: chatId, members: chatMemberId };
+				queryResolver.setSchema(schema);
 
-				return new Promise((resolve, reject) => {
-					db.getConnect(function (connect) {
-						connect.collection(collectionName).findOne(criteria, function (error, result) {
-							return error
-								? reject(error)
-								: result
-								? resolve(new Chat().set(result))
-								: resolve(result);
-						});
+				return queryResolver
+					.collection(collectionName)
+					.setQuery(query, criteria.filter)
+					.findOne()
+					.then(function (result) {
+						return result && new Chat().set(result);
 					});
-				});
 			}
 
-			static findAllByMember(memberId) {
-				var chatMemberId, criteria;
+			static findAllByMember(memberId, count, criteria = {}) {
+				var chatMemberId,
+					query,
+					queryResolver = new QueryResolver();
 
 				chatMemberId = db.ObjectId(memberId);
 
-				criteria = { members: chatMemberId };
+				query = { members: chatMemberId };
+				queryResolver.setSchema(schema);
 
-				return new Promise((resolve, reject) => {
-					db.getConnect(function (connect) {
-						connect.collection(collectionName).find(criteria).toArray(function (error, result) {
-							return error
-								? reject(error)
-								: resolve(result);
-						});
-					});
-				});
+				return queryResolver
+					.collection(collectionName)
+					.addQuery(query)
+					.bindCriteria(criteria)
+					.find();
 			}
 		}
 

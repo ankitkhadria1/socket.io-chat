@@ -47,6 +47,7 @@
 
 			EVENTS = {
 				AUTHENTICATE:     'authenticate',
+				JOIN:			  'join',
 				CREATE:           'create',
 				LEAVE:            'leave',
 				ADDMEMBER:        'addMember',
@@ -484,15 +485,16 @@
 		 *
 		 * @param {ObjectId} chatId
 		 * @param {ObjectId} user
-		 * @param {Number} count
+		 * @param {Number} limit
 		 * @param {Number} flag
+		 * @param {Object} criteria
 		 * @returns {Promise}
 		 */
-		findLastMessages(chatId, user, count, flag = FLAGS.RECEIVER) {
+		findLastMessages(chatId, user, limit, flag = FLAGS.RECEIVER, criteria = {}) {
 			return new Promise((resolve, reject) => {
-				this._validatePath(this.EVENTS.FINDMESSAGESLAST, { chatId, user, count, flag })
+				this._validatePath(this.EVENTS.FINDMESSAGESLAST, { chatId, user, limit, flag, criteria })
 					.then(() => {
-						return this.model('message').findLast(chatId, user, count);
+						return this.model('message').findLast(chatId, user, limit, criteria);
 					})
 					.then(resolve)
 					.catch(reject);
@@ -505,15 +507,16 @@
 		 * @param {ObjectId} chatId
 		 * @param {ObjectId} messageId
 		 * @param {ObjectId} user
-		 * @param {Number} count
+		 * @param {Number} limit
 		 * @param {Number} flag
+		 * @param {Object} criteria
 		 * @returns {Promise}
 		 */
-		findFromMessages(chatId, messageId, user, count, flag = FLAGS.RECEIVER) {
+		findFromMessages(chatId, messageId, user, limit, flag = FLAGS.RECEIVER, criteria = {}) {
 			return new Promise((resolve, reject) => {
-				this._validatePath(this.EVENTS.FINDMESSAGESFROM, { chatId, messageId, user, count, flag })
+				this._validatePath(this.EVENTS.FINDMESSAGESFROM, { chatId, messageId, user, limit, flag, criteria })
 					.then(() => {
-						return this.model('message').findFrom(chatId, messageId, user, count)
+						return this.model('message').findFrom(chatId, messageId, user, limit, criteria)
 					})
 					.then(resolve, reject)
 					.catch(reject);
@@ -526,15 +529,16 @@
 		 * @param {ObjectId} chatId
 		 * @param {ObjectId} messageId
 		 * @param {ObjectId} user
-		 * @param {Number} count
+		 * @param {Number} limit
 		 * @param {Number} flag
+		 * @param {Object} criteria
 		 * @returns {Promise}
 		 */
-		findAtMessages(chatId, messageId, user, count, flag = FLAGS.RECEIVER) {
+		findAtMessages(chatId, messageId, user, limit, flag = FLAGS.RECEIVER, criteria = {}) {
 			return new Promise((resolve, reject) => {
-				this._validatePath(this.EVENTS.FINDMESSAGESAT, { chatId, messageId, user, count, flag })
+				this._validatePath(this.EVENTS.FINDMESSAGESAT, { chatId, messageId, user, limit, flag, criteria })
 					.then(() => {
-						return this.model('message').findAt(chatId, messageId, user, count)
+						return this.model('message').findAt(chatId, messageId, user, limit, criteria)
 					})
 					.then(resolve, reject)
 					.catch(reject);
@@ -542,23 +546,23 @@
 		}
 
 		/** find chats */
-
-		findChats(user, count = 10) {
+		findChats(user, limit = 10, criteria = {}) {
 			return new Promise((resolve, reject) => {
-				this._validatePath(this.EVENTS.FINDCHATS, { user, count })
+				this._validatePath(this.EVENTS.FINDCHATS, { user, limit, criteria })
 					.then(() => {
-						return this.model('chat').findAllByMember(user)
+						return this.model('chat').findAllByMember(user, limit, criteria)
 					})
 					.then(resolve, reject)
 					.catch(reject);
 			});
 		}
 
-		findChatById(user, chatId) {
+		/** find one chat */
+		findChatById(user, chatId, criteria = {}) {
 			return new Promise((resolve, reject) => {
-				this._validatePath(this.EVENTS.FINDCHAT, { user, chatId })
+				this._validatePath(this.EVENTS.FINDCHAT, { user, chatId, criteria })
 					.then(() => {
-						return this.model('chat').findByMember(chatId, user)
+						return this.model('chat').findByMember(chatId, user, criteria)
 					})
 					.then(resolve, reject)
 					.catch(reject);
