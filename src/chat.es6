@@ -36,7 +36,7 @@
 
 			setCreator(id) {
 				if (db.ObjectID.isValid(id)) {
-					this.set('creatorId', id);
+					this.set('creatorId', db.ObjectId(id));
 					this.addMember(id);
 				}
 
@@ -58,7 +58,7 @@
 
 					if (index === -1) {
 						this.get('members').push(memberId);
-						this.$addToSet('members', memberId);
+						this.$addToSet('members', memberId, true);
 					}
 				}
 
@@ -96,8 +96,22 @@
 				return !!~this.indexMember(id);
 			}
 
+			incCountMessages() {
+				if (typeof this.get('countMessages') !== 'undefined') {
+					this.set('countMessages', this.get('countMessages'));
+				}
+			}
+
 			collection() {
 				return collectionName;
+			}
+
+			static collection() {
+				return collectionName;
+			}
+
+			static schema() {
+				return schema;
 			}
 
 			determinateType() {
@@ -110,6 +124,15 @@
 				}
 
 				return null;
+			}
+
+			static fill (props, isAtomic) {
+				var model = new Chat();
+
+				model.isNew = false;
+				model.fill(props, isAtomic);
+
+				return model;
 			}
 
 			static findById(id, criteria = {}) {
@@ -126,7 +149,9 @@
 					.setQuery(query, criteria.filter)
 					.findOne()
 					.then(function (result) {
-						return result && new Chat().set(result);
+						var m = Chat.fill(result);
+
+						return result && Chat.fill(result);
 					});
 			}
 
@@ -147,7 +172,7 @@
 					.setQuery(query, criteria.filter)
 					.findOne()
 					.then(function (result) {
-						return result && new Chat().set(result);
+						return result && Chat.fill(result);
 					});
 			}
 
@@ -168,7 +193,7 @@
 					.setQuery(query, criteria.filter)
 					.findOne()
 					.then(function (result) {
-						return result && new Chat().set(result);
+						return result && Chat.fill(result);
 					});
 			}
 
@@ -187,6 +212,41 @@
 					.addQuery(query)
 					.bindCriteria(criteria)
 					.find();
+			}
+
+			static findEqual(chatModel) {
+				var queryResolver = new QueryResolver(),
+					query = {
+						_id: db.ObjectId(chatModel.get('_id')),
+						members: chatModel.get('members').map(db.ObjectId)
+					};
+
+				queryResolver.setSchema(schema);
+
+				return queryResolver
+					.collection(collectionName)
+					.findOne(query)
+					.then(function (result) {
+						return result && Chat.fill(result);
+					});
+
+				//return queryResolver
+				//	.collection(collectionName)
+				//	.setQuery(query)
+				//	.findOne()
+				//	.then(function (result) {
+				//		return result && Chat.fill(result);
+				//	});
+			}
+
+
+
+			static find(query) {
+				return Model.find.call(Chat, query);
+			}
+
+			static findOne(id) {
+				return Model.findOne.call(Chat, id);
 			}
 		}
 

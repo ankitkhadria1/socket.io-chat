@@ -40,6 +40,16 @@
         "changeTitle": { "type": "boolean", "default": { "type": "Boolean", "value": 0 } }
       },
       "default": "Object"
+    },
+    "countMessages": {
+      "type": "number",
+      "default": { "type": "Number", "value": 0 },
+      "readonly": 1
+    },
+    "lastMessageAt": {
+      "type": "date-time",
+      "default": "null",
+      "readonly": 1
     }
   },
   "required": [

@@ -7,6 +7,7 @@
 		Message      = require('./message'),
 		EventEmitter = require('events').EventEmitter,
 		util         = require('util'),
+		debug        = require('debug')('develop'),
 		_            = require('underscore'),
 		FLAGS        = require('./flags'),
 		socketMixin  = require('./socket'),
@@ -45,9 +46,13 @@
 
 			eventPrefix = options.eventPrefix || '';
 
+			this.options = options;
+
+			options.chatMessagesInc = options.chatMessagesInc || true;
+
 			EVENTS = {
 				AUTHENTICATE:     'authenticate',
-				JOIN:			  'join',
+				JOIN:             'join',
 				CREATE:           'create',
 				LEAVE:            'leave',
 				ADDMEMBER:        'addMember',
@@ -79,14 +84,14 @@
 			this.__members = new Members();
 			this.__rooms   = new Rooms();
 
-			this.__models.chat    = Chat({
+			this.__models.chat = Chat({
 				collection: collectionChat,
-				schema: options.schemaChat || undefined
+				schema:     options.schemaChat || undefined
 			});
 
 			this.__models.message = Message({
 				collection: collectionChatMessages,
-				schema: options.schemaMessage || undefined
+				schema:     options.schemaMessage || undefined
 			});
 
 			this.io = io = IO(server, { maxHttpBufferSize: 1000 });
@@ -143,7 +148,7 @@
 				});
 
 				socket.on('error', function (error) {
-					console.log(error);
+					console.log(error.stack);
 					self.emit('error', this, error.event, error);
 				});
 
@@ -155,6 +160,50 @@
 				});
 
 				_.extend(socket, socketMixin);
+			});
+
+			this.on(this.EVENTS.NEWMESSAGE, (data) => {
+				if (this.options.chatMessagesInc) {
+					data.chat.fill('lastMessageAt', new Date(), true);
+					data.chat.fill('countMessages', data.chat.get('countMessages') + 1, true);
+					data.chat.save();
+				}
+			});
+
+			this.validate('create', (options, next) => {
+				if (this.options.singlePrivateChat && options.chat.get('members').length === 1) {
+					switch (options.chat.type) {
+						case 'private':
+							this.model('chat').findEqual(options.chat)
+								.then(function (equalChat) {
+									equalChat && (options.chat = equalChat);
+
+									next();
+								});
+							break;
+
+						default:
+							next();
+					}
+				} else {
+					next();
+				}
+
+			});
+
+			this.validate('addMember', (options, next) => {
+				var chat;
+
+				if (this.options.newChatOnGroup) {
+					chat = new (this.model('chat'))();
+					chat.set(options.chat.toJSON());
+
+					options.chat = chat;
+
+					next();
+				} else {
+					next();
+				}
 			});
 		}
 
@@ -297,7 +346,7 @@
 						return this.action.validate(flag, { chat, performer });
 					})
 					.then(() => {
-						chat.update((error) => {
+						chat.save((error) => {
 							if (error) {
 								return reject(error);
 							}
@@ -377,7 +426,7 @@
 
 							resolve(message);
 
-							this.emit(this.EVENTS.NEWMESSAGE, chat, message);
+							this.emit(this.EVENTS.NEWMESSAGE, { chat, message });
 						});
 					})
 					.catch(reject);

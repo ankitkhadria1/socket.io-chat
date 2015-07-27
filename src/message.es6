@@ -89,6 +89,14 @@
 				return collectionName;
 			}
 
+			static collection() {
+				return collectionName;
+			}
+
+			static schema() {
+				return schema;
+			}
+
 			static findLast(dataChatId, user, count, flag = FLAGS.RECEIVER, criteria = {}) {
 				var chatId        = db.ObjectId(dataChatId),
 					userId        = db.ObjectId(user),
@@ -167,6 +175,13 @@
 					.find();
 			}
 
+			static find(query) {
+				return Model.find.call(Message, query);
+			}
+
+			static findOne(id) {
+				return Model.findOne.call(Message, id);
+			}
 		}
 
 		return Message;
