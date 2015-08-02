@@ -328,7 +328,7 @@
 					if (!(chat = result)) {
 						throw new ClientError('Chat not found');
 					}
-
+					
 					return client.newMessage(chat, data, socket.user);
 				})
 				.then((message) => {

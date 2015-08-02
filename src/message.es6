@@ -176,11 +176,15 @@
 			}
 
 			static find(query) {
-				return Model.find.call(Message, query);
+				return Model.find(Message, query);
 			}
 
-			static findOne(id) {
-				return Model.findOne.call(Message, id);
+			static findOne(query) {
+				return Model.findOne(Message, query);
+			}
+
+			static update() {
+				return Model.update.apply(Message, arguments);
 			}
 		}
 

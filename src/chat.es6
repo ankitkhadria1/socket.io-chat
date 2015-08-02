@@ -130,7 +130,7 @@
 				var model = new Chat();
 
 				model.isNew = false;
-				model.fill(props, isAtomic);
+				model.fill(props, !!isAtomic);
 
 				return model;
 			}
@@ -229,24 +229,18 @@
 					.then(function (result) {
 						return result && Chat.fill(result);
 					});
-
-				//return queryResolver
-				//	.collection(collectionName)
-				//	.setQuery(query)
-				//	.findOne()
-				//	.then(function (result) {
-				//		return result && Chat.fill(result);
-				//	});
 			}
-
-
 
 			static find(query) {
-				return Model.find.call(Chat, query);
+				return Model.find(Chat, query);
 			}
 
-			static findOne(id) {
-				return Model.findOne.call(Chat, id);
+			static findOne(query) {
+				return Model.findOne(Chat, query);
+			}
+
+			static update() {
+				return Model.update.apply(Model, arguments);
 			}
 		}
 

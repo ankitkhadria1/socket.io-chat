@@ -51,7 +51,7 @@
 					message = this.__validators[flag].message;
 				}
 
-				return result ? resolve() : reject(new ClientError(message));
+				return result ? resolve(options) : reject(new ClientError(message));
 			});
 		}
 	}
