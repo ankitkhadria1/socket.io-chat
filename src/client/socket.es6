@@ -1,0 +1,463 @@
+import ClientError  from './error';
+import debugBase    from 'debug';
+
+var debug = debugBase('develop');
+
+function catchErrorMessage(error) {
+	switch (error.type) {
+		case 'validation':
+		case 'client':
+			return error.message;
+		default:
+			// TODO: debug(error.stack);
+			debug(error.stack);
+			return 'Unknown error';
+	}
+}
+
+/**
+ * @function socketError
+ * @param {String} event
+ * @param {Error|String} error
+ * @returns {Error}
+ */
+function socketError(event, error) {
+	var sError = new Error();
+
+	sError.event = String(event);
+
+	switch (Object.prototype.toString.call(error)) {
+		case '[object Error]':
+			sError.message = error.message;
+			break;
+		case '[object String]':
+			sError.message = error;
+			break;
+		default:
+			sError.message = String(error);
+	}
+
+	return sError;
+}
+
+class ClientSocket {
+	constructor() {
+		this.emitResult.transform = function (data, next) {
+			next(data);
+		};
+
+		this.emitError.transform = function (data, next) {
+			next(data);
+		};
+
+		this.emitError.transformOn = (event, cb) => {
+			if (!this.emitError.__transforms) {
+				this.emitError.__transforms = {}
+			}
+
+			if (!this.emitError.__transforms[event]) {
+				this.emitError.__transforms[event] = [];
+			}
+
+			this.emitError.__transforms[event].push(cb);
+
+			return this.emitResult;
+		};
+
+		this.emitResult.transformOn = (event, cb) => {
+			if (!this.emitResult.__transforms) {
+				this.emitResult.__transforms = {}
+			}
+
+			if (!this.emitResult.__transforms[event]) {
+				this.emitResult.__transforms[event] = [];
+			}
+
+			this.emitResult.__transforms[event].push(cb);
+
+			return this.emitResult;
+		};
+	}
+
+	emitError(socket, event, data) {
+		var index      = 0,
+		    transforms = this.emitError.__transforms || {},
+		    transformCb;
+
+		function nextTransform(data) {
+			transformCb = transforms[event] ? transforms[event][index] : null;
+
+			if (transformCb) {
+				transformCb(data, function (data) {
+					index++;
+
+					if (transforms.length === index) {
+						socket.emit(event, { error: data });
+					} else {
+						nextTransform(data);
+					}
+				});
+			} else {
+				socket.emit(event, { error: data });
+			}
+		}
+
+		this.emitError.transform(data, (data) => {
+			nextTransform(data);
+		});
+	}
+
+	emitResult(socket, event, data) {
+		var index      = 0,
+		    transforms = this.emitResult.__transforms || {},
+		    transformCb;
+
+		function nextTransform(data) {
+			transformCb = transforms[event] ? transforms[event][index] : null;
+
+			if (transformCb) {
+				transformCb(data, function (data) {
+					index++;
+
+					if (transforms.length === index) {
+						socket.emit(event, { result: data });
+					} else {
+						nextTransform(data);
+					}
+				});
+			} else {
+				socket.emit(event, { result: data });
+			}
+		}
+
+		this.emitResult.transform(data, (data) => {
+			nextTransform(data);
+		});
+	}
+
+	onAuthenticate(client, socket, data = {}) {
+		client.emit(client.EVENTS.AUTHENTICATE, socket, data, (error) => {
+			if (error) {
+				return this.emitError(socket, 'login', { message: error.message || error });
+			}
+
+			if (!client.authorize(socket)) {
+				return;
+			}
+
+			client.members.add(socket.user, socket);
+
+			this.emitResult(socket, 'login', { user: socket.user });
+			this.emitResult(socket, 'authenticate', { user: socket.user });
+		});
+	}
+
+	onCreate(client, socket, data = {}) {
+		client.create(data, socket.user)
+			.then((chat) => {
+				this.emitResult(socket, client.EVENTS.CREATE, { message: 'Chat created', data: chat.toJSON() });
+
+				client.rooms.addMembers(
+					chat.get('_id'),
+					client.members.get(chat.get('members'))
+				);
+
+				client.members.get(chat.get('members'))
+					.forEach((socket) => {
+						this.emitResult(socket, client.EVENTS.JOIN, {
+							message: 'Join to chat',
+							data:    chat.toJSON()
+						});
+					});
+
+			})
+			.catch((error) => {
+				return this.emitError(socket, client.EVENTS.CREATE, { message: error.message });
+			});
+	}
+
+	onLeave(client, socket, data = {}) {
+		var chat;
+
+		client.model('chat').findById(data.chatId)
+			.then((result) => {
+				if (!(chat = result)) {
+					throw new ClientError('Chat not found');
+				}
+
+				return client.leave(chat, socket.user)
+			})
+			.then((member) => {
+				client.rooms.removeMember(chat.get('_id'), member);
+
+				let receivers = chat.get('members').concat(member),
+				    sockets   = client.members.get(receivers);
+
+				if (chat.systemMessages && chat.systemMessages.leaveMember) {
+					client.newSystemMessage(chat, { whoLeaved: member })
+						.then((message) => {
+							sockets.forEach((socket) => {
+								this.emitResult(socket, client.EVENTS.NEWSYSTEMMESSAGE, {
+									message: 'New system message', data: message.toJSON(), chatId: chat.get('_id')
+								});
+							});
+						})
+				}
+
+				sockets.forEach((socket) => {
+					this.emitResult(socket, client.EVENTS.LEAVE, {
+						message: 'The member leaved',
+						data:    member,
+						chatId:  chat.get('_id')
+					});
+				});
+			})
+			.catch((error) => {
+				this.emitError(socket, client.EVENTS.LEAVE, { message: catchErrorMessage(error) });
+			});
+	}
+
+	onAddMember(client, socket, data = {}) {
+		var chat, countBefore, countAfter;
+
+		client.model('chat').findById(data.chatId)
+			.then((result) => {
+				if (!(chat = result)) {
+					throw new ClientError('Chat not found');
+				}
+
+				countBefore = chat.get('members').length;
+
+				return client.addMember(chat, data.member, socket.user)
+			})
+			.then((member) => {
+				countAfter = chat.get('members').length;
+
+				if (countBefore === countAfter) {
+					return;
+				}
+
+				let receivers = chat.get('members'),
+				    sockets   = client.members.get(receivers);
+
+				client.rooms.addMembers(chat.get('_id'), member);
+
+				if (chat.systemMessages && chat.systemMessages.addMember) {
+					client.newSystemMessage(chat, { whoAdded: socket.user, whomAdded: member })
+						.then((message) => {
+							sockets.forEach((socket) => {
+								this.emitResult(socket, client.EVENTS.NEWMESSAGE, {
+									message: 'New system message',
+									data:    message.toJSON(),
+									chatId:  chat.get('_id')
+								});
+							});
+						})
+				}
+
+				sockets.forEach((socket) => {
+					this.emitResult(socket, client.EVENTS.ADDMEMBER, {
+						message: 'The member added',
+						data:    member,
+						chatId:  chat.get('_id')
+					});
+				});
+			})
+			.catch((error) => {
+				this.emitError(socket, client.EVENTS.ADDMEMBER, { message: catchErrorMessage(error) });
+			});
+	}
+
+	onRemoveMember(client, socket, data = {}) {
+		var chat, countBefore, countAfter;
+
+		client.model('chat').findById(data.chatId)
+			.then((result) => {
+				if (!(chat = result)) {
+					throw new ClientError('Chat not found');
+				}
+
+				countBefore = chat.get('members').length;
+
+				return client.removeMember(chat, data.member, socket.user)
+			})
+			.then((member) => {
+				countAfter = chat.get('members').length;
+
+				if (countBefore === countAfter) {
+					return;
+				}
+
+				client.rooms.removeMember(chat.get('_id'), member);
+
+				let receivers = chat.get('members').concat(member),
+				    sockets   = client.members.get(receivers);
+
+				if (chat.systemMessages && chat.systemMessages.removeMember) {
+					client.newSystemMessage(chat, { whoRemove: socket.user, whomRemove: member })
+						.then((message) => {
+							sockets.forEach((socket) => {
+								this.emitResult(socket, client.EVENTS.NEWMESSAGE, {
+									message: 'New system message',
+									data:    message.toJSON(),
+									chatId:  chat.get('_id')
+								});
+							});
+						});
+				}
+
+				sockets.forEach((socket) => {
+					this.emitResult(socket, client.EVENTS.REMOVEMEMBER, {
+						message: 'The member removed',
+						data:    member,
+						chatId:  chat.get('_id')
+					});
+				});
+			})
+			.catch((error) => {
+				this.emitError(socket, client.EVENTS.REMOVEMEMBER, { message: catchErrorMessage(error) });
+			});
+	}
+
+	onNewMessage(client, socket, data = {}) {
+		var chat;
+
+		client.model('chat').findById(data.chatId)
+			.then((result) => {
+				if (!(chat = result)) {
+					throw new ClientError('Chat not found');
+				}
+
+				return client.newMessage(chat, data, socket.user);
+			})
+			.then((message) => {
+				client.members.get(chat.get('members'))
+					.forEach((socket) => {
+						this.emitResult(socket, client.EVENTS.NEWMESSAGE, {
+							message: 'New message',
+							data:    message.toJSON(),
+							chatId:  chat.get('_id')
+						});
+					});
+			})
+			.catch((error) => {
+				this.emitError(socket, client.EVENTS.NEWMESSAGE, { message: catchErrorMessage(error) });
+			});
+	}
+
+	onFindMessagesLast(client, socket, data = {}) {
+		client.findLastMessages(data.chatId, socket.user, data.limit, FLAGS.RECEIVER, {
+			filter: data.filter, sort: data.sort, limit: data.limit, next: data.next, prev: data.prev
+		})
+			.then((messages) => {
+				this.emitResult(socket, client.EVENTS.FINDMESSAGESLAST, {
+					chatId: data.chatId,
+					data:   messages
+				})
+			})
+			.catch((error) => {
+				this.emitError(socket, client.EVENTS.FINDMESSAGESLAST, { message: catchErrorMessage(error) });
+			});
+	}
+
+	onFindMessagesFrom(client, socket, data = {}) {
+		client.findFromMessages(data.chatId, data.messageId, socket.user, data.limit, FLAGS.RECEIVER, {
+			filter: data.filter, sort: data.sort, limit: data.limit, next: data.next, prev: data.prev
+		})
+			.then((messages) => {
+				this.emitResult(socket, client.EVENTS.FINDMESSAGESFROM, {
+					chatId: data.chatId,
+					data:   messages
+				});
+			})
+			.catch((error) => {
+				this.emitError(socket, client.EVENTS.FINDMESSAGESFROM, { message: catchErrorMessage(error) });
+			});
+	}
+
+	onFindMessagesAt(client, socket, data = {}) {
+		client.findAtMessages(data.chatId, data.messageId, socket.user, data.limit, FLAGS.RECEIVER, {
+			filter: data.filter, sort: data.sort, limit: data.limit, next: data.next, prev: data.prev
+		})
+			.then((messages) => {
+				this.emitResult(socket, client.EVENTS.FINDMESSAGESAT, { chatId: data.chatId, data: messages });
+			})
+			.catch((error) => {
+				this.emitError(socket, client.EVENTS.FINDMESSAGESAT, { message: catchErrorMessage(error) });
+			});
+	}
+
+	onFindChat(client, socket, data = {}) {
+		client.findChatById(socket.user, data.chatId)
+			.then((chat) => {
+				this.emitResult(socket, client.EVENTS.FINDCHAT, { data: chat });
+			})
+			.catch((error) => {
+				this.emitError(socket, client.EVENTS.FINDCHAT, { message: catchErrorMessage(error) });
+			});
+	}
+
+	onFindChats(client, socket, data = {}) {
+		client.findChats(socket.user, data.limit, {
+			filter: data.filter, sort: data.sort, limit: data.limit, next: data.next, prev: data.prev
+		})
+			.then((chats) => {
+				this.emitResult(socket, client.EVENTS.FINDCHATS, { data: chats });
+			})
+			.catch((error) => {
+				this.emitError(socket, client.EVENTS.FINDCHATS, { message: catchErrorMessage(error) });
+			});
+	}
+
+	onChangeTitle(client, socket, data = {}) {
+		var oldTitle;
+
+		client.model('chat').findById(data.chatId)
+			.then((chat) => {
+				if (!chat) {
+					throw new ClientError('Chat not found');
+				}
+
+				oldTitle = String(chat.get('title'));
+
+				return client.changeTitle(chat, data.title, socket.user)
+			})
+			.then((chat) => {
+				let receivers = chat.get('members'),
+				    sockets   = client.members.get(receivers);
+
+				if (chat.systemMessages && chat.systemMessages.changeTitle) {
+					client.newSystemMessage(chat, {
+						changed: socket.user, oldTitle: oldTitle, newTitle: chat.get('title')
+					}).then((message) => {
+						sockets.forEach((socket) => {
+							this.emitResult(socket, client.EVENTS.NEWMESSAGE, {
+								message: 'New system message',
+								data:    message.toJSON(),
+								chatId:  chat.get('_id')
+							});
+						});
+					})
+				}
+
+				sockets.forEach((socket) => {
+					this.emitResult(socket, client.EVENTS.CHANGETITLE, {
+						message: 'Title changed',
+						data:    chat.get('title'),
+						chatId:  chat.get('_id')
+					});
+				});
+			})
+			.catch((error) => {
+				this.emitError(socket, client.EVENTS.CHANGETITLE, { message: catchErrorMessage(error) });
+			});
+	}
+}
+
+export default ClientSocket;
+
+client.on(client.EVENTS.CREATE)
+	.then(request.onCreate)
+	.then(client.create)
+	.then(response.onCreate)
+	.catch(next);

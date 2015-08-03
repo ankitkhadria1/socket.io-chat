@@ -1,6 +1,43 @@
+export function Create(client, options) {
+	let members = client.members.get(options.chat.get('members'));
+
+	client.rooms.addMembers(options.chat.get('_id'), members);
+	client.members.forEach((socket) => {
+		this.emitResult(socket, client.EVENT.JOIN, {
+			message: 'Join to chat',
+			data:    chat.toJSON()
+		})
+	});
+}
+
+export function Leave(client, options) {
+	client.__rooms.removeMember(options.chat.get('_id'), options.member);
+
+	let receivers = chat.get('members').concat(options.member),
+	    sockets   = client.members.get(receivers);
+
+	if (chat.systemMessages && chat.systemMessages.leaveMember) {
+		client.newSystemMessage(chat, {whoLeaved: member})
+			.then((message) => {
+				sockets.forEach((socket) => {
+					this.emitResult(socket, client.EVENTS.NEWSYSTEMMESSAGE, {
+						message: 'New system message', data: message.toJSON(), chatId: chat.get('_id')
+					});
+				});
+			})
+	}
+
+	sockets.forEach((socket) => {
+		this.emitResult(socket, client.EVENTS.LEAVE, {
+			message: 'The member leaved',
+			chatId:  chat.get('_id'),
+			data:    member
+		});
+	});
+}
 
 class ClientResponse {
-	constructor (client) {
+	constructor(client) {
 		this.client = client;
 
 		this.emitResult.transform = function (data, next) {
@@ -42,8 +79,8 @@ class ClientResponse {
 
 	emitError(socket, event, data) {
 		var index      = 0,
-			transforms = this.emitError.__transforms || {},
-			transformCb;
+		    transforms = this.emitError.__transforms || {},
+		    transformCb;
 
 		function nextTransform(data) {
 			transformCb = transforms[event] ? transforms[event][index] : null;
@@ -53,13 +90,13 @@ class ClientResponse {
 					index++;
 
 					if (transforms.length === index) {
-						socket.emit(event, { error: data });
+						socket.emit(event, {error: data});
 					} else {
 						nextTransform(data);
 					}
 				});
 			} else {
-				socket.emit(event, { error: data });
+				socket.emit(event, {error: data});
 			}
 		}
 
@@ -70,8 +107,8 @@ class ClientResponse {
 
 	emitResult(socket, event, data) {
 		var index      = 0,
-			transforms = this.emitResult.__transforms || {},
-			transformCb;
+		    transforms = this.emitResult.__transforms || {},
+		    transformCb;
 
 		function nextTransform(data) {
 			transformCb = transforms[event] ? transforms[event][index] : null;
@@ -81,13 +118,13 @@ class ClientResponse {
 					index++;
 
 					if (transforms.length === index) {
-						socket.emit(event, { result: data });
+						socket.emit(event, {result: data});
 					} else {
 						nextTransform(data);
 					}
 				});
 			} else {
-				socket.emit(event, { result: data });
+				socket.emit(event, {result: data});
 			}
 		}
 
@@ -105,15 +142,15 @@ class ClientResponse {
 
 	create(chat) {
 		let client = this;
-		
-		this.emitResult(socket, client.EVENTS.CREATE, { message: 'Chat created', data: chat.toJSON() });
 
-		client.__rooms.addMembers(
+		this.emitResult(socket, client.EVENTS.CREATE, {message: 'Chat created', data: chat.toJSON()});
+
+		client.rooms.addMembers(
 			chat.get('_id'),
 			client.__members.get(chat.get('members'))
 		);
 
-		client.__members.get(chat.get('members'))
+		client.members.get(chat.get('members'))
 			.forEach((socket) => {
 				this.emitResult(socket, client.EVENTS.JOIN, {
 					message: 'Join to chat',
@@ -128,10 +165,10 @@ class ClientResponse {
 		client.__rooms.removeMember(chat.get('_id'), member);
 
 		let receivers = chat.get('members').concat(member),
-			sockets   = client.__members.get(receivers);
+		    sockets   = client.__members.get(receivers);
 
 		if (chat.systemMessages && chat.systemMessages.leaveMember) {
-			client.newSystemMessage(chat, { whoLeaved: member })
+			client.newSystemMessage(chat, {whoLeaved: member})
 				.then((message) => {
 					sockets.forEach((socket) => {
 						this.emitResult(socket, client.EVENTS.NEWSYSTEMMESSAGE, {
@@ -149,24 +186,31 @@ class ClientResponse {
 			});
 		});
 	}
+
 	addMember() {}
+
 	findMessagesLast() {}
+
 	findMessagesFrom() {}
+
 	findMessagesAt() {}
+
 	findChat() {}
+
 	findChats() {}
+
 	changeTitle() {}
 
-	removeMember (member, chat) {
+	removeMember(member, chat) {
 		let client = this;
 
 		client.__rooms.removeMember(chat.get('_id'), member);
 
 		let receivers = chat.get('members').concat(member),
-			sockets   = client.__members.get(receivers);
+		    sockets   = client.__members.get(receivers);
 
 		if (chat.systemMessages && chat.systemMessages.removeMember) {
-			client.newSystemMessage(chat, { whoRemove: socket.user, whomRemove: member })
+			client.newSystemMessage(chat, {whoRemove: socket.user, whomRemove: member})
 				.then((message) => {
 					sockets.forEach((socket) => {
 						this.emitResult(socket, client.EVENTS.NEWMESSAGE, {
@@ -187,7 +231,7 @@ class ClientResponse {
 		});
 	}
 
-	newMessage (message, chat) {
+	newMessage(message, chat) {
 		let client = this;
 
 		client.__members.get(chat.get('members'))

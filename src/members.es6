@@ -61,6 +61,10 @@
 				return this.__members.get(String(id));
 			}
 		}
+
+		isOnline(id) {
+			return this.__members.has(String(id)) && this.__members.get(String(id)).length > 0;
+		}
 	}
 
 	module.exports = Members;
