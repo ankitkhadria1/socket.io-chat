@@ -1,4 +1,4 @@
-l'use strict';
+'use strict';
 
 export function chatMessagesInc (options) {
 	var count = options.chat.get('countMessages');
