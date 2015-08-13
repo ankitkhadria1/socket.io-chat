@@ -106,6 +106,14 @@ class QueryResolver {
 				}
 			});
 		}
+
+		return this;
+	}
+
+	merge(query = {}) {
+		this.__query = extend(this.__query, query);
+
+		return this;
 	}
 
 	find (query = {}, select = {}, options = {}) {

@@ -1,4 +1,4 @@
-import { chatMessagesInc, singlePrivateChat, newChatOnGroup } from './clientValidators';
+import { chatMessagesInc, singlePrivateChat, newChatOnGroup, activeReadMessage } from './validators';
 import IO           from 'socket.io';
 import db           from '../db';
 import Chat         from '../chat';
@@ -61,7 +61,9 @@ class Client extends EventEmitter {
 			FINDMESSAGESFROM: 'findMessagesFrom',
 			FINDMESSAGESAT:   'findMessagesAt',
 			FINDCHATS:        'findChats',
-			FINDCHAT:         'findChat'
+			FINDCHAT:         'findChat',
+			ACTIVE: 		  'active',
+			READMESSAGE: 	  'readMessage'
 		};
 
 		_.assign(EVENTS, _.pick(options.EVENTS || {}, Object.keys(EVENTS)));
@@ -94,21 +96,9 @@ class Client extends EventEmitter {
 		this.io = io = IO(server, {maxHttpBufferSize: 1000});
 
 		io.on('connection', function (socket) {
-			self.emit('connection', socket);
-
 			socket.on(EVENTS.AUTHENTICATE, function (data) {
 				self.socket.onAuthenticate(self, this, data);
 			});
-
-			socket.pipe(EVENTS.CREATE)
-				.then(request.onCreate)
-				.then(client.create)
-				.then(response.onCreate);
-
-			chat.request.onCreate();
-			chat.response.onCreate();
-
-			client.response.Create()
 
 			socket.on(EVENTS.CREATE, function (data) {
 				self.authorize(this) && self.socket.onCreate(self, this, data);
@@ -154,6 +144,13 @@ class Client extends EventEmitter {
 				self.authorize(this) && self.socket.onFindChat(self, this, data);
 			});
 
+			socket.on(EVENTS.ACTIVE, function (data) {
+				if (self.authorize(this)) {
+					console.log('active', data.active);
+					socket.isActive = !!data.active;
+				}
+			});
+
 			socket.on('error', function (error) {
 				console.log(error.stack);
 				self.emit('error', this, error.event, error);
@@ -179,6 +176,10 @@ class Client extends EventEmitter {
 
 		if (this.options.newChatOnGroup) {
 			this.validate(this.EVENTS.ADDMEMBER, newChatOnGroup.bind(this));
+		}
+
+		if (this.options.activeReadMessage) {
+			this.validate(this.EVENTS.NEWMESSAGE, activeReadMessage.bind(this));
 		}
 	}
 
@@ -494,18 +495,41 @@ class Client extends EventEmitter {
 
 		return new Promise((resolve, reject) => {
 			this._validatePath(this.EVENTS.NEWSYSTEMMESSAGE, {chat, message, data})
-				.then(() => {
-					message.save((error) => {
+				.then((post) => {
+					post.message.save((error) => {
 						if (error) {
 							return reject(error);
 						}
 
-						resolve(message);
+						resolve(post.message);
 
-						this.emit(this.EVENTS.NEWSYSTEMMESSAGE, chat, message);
+						this.emit(this.EVENTS.NEWSYSTEMMESSAGE, post.chat, post.message);
 					});
 				})
 				.catch(reject);
+		});
+	}
+
+	readMessage(chat, message, performer = null, flag = FLAGS.AUTHOR) {
+		message.setReaded(performer);
+
+		return new Promise((resolve ,reject) => {
+			this._validatePath(this.EVENTS.READMESSAGE, {chat, message, performer})
+				.then((post) => {
+					this.action.validate(flag, {chat, performer})
+						.then(function () {
+							post.message.update((error) => {
+								if (error) {
+									return reject(error);
+								}
+
+								resolve(post.message);
+
+								this.emit(this.EVENTS.READMESSAGE, post.message, post.chat, post.performer);
+							});
+						})
+
+				})
 		});
 	}
 

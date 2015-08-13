@@ -79,6 +79,28 @@
 				this.set('system', data);
 			}
 
+			setReaded(user) {
+				var userId = new db.ObjectId(user);
+
+				if (!userId) {
+					return;
+				}
+
+				if (!~this.receivers.map(String).indexOf(String(userId))) {
+					return;
+				}
+
+				if (this.read && this.read.map(String).indexOf(String(userId))) {
+					return;
+				}
+
+				if (!read) {
+					this.set('read', []);
+				}
+
+				this.read.push(userId);
+			}
+
 			addAttachments(files = {}) {
 				_.each(files, function (file) {
 
@@ -173,6 +195,40 @@
 					.setSort({}, criteria.sort)
 					.setLimit(criteria.limit || count)
 					.find();
+			}
+
+			static findUnreaded(user, flag = FLAGS.RECEIVER, criteria = {}) {
+				var userId = db.ObjectId(user),
+					query = {
+						read: { $nin: [userId] }
+					};
+
+				switch (flag) {
+					case FLAGS.AUTHOR: query.authorId = userId; break;
+					case FLAGS.RECEIVER: query.receivers = userId; break;
+				}
+
+				return Model
+					.find(Message, query)
+					.sort({ createdAt: -1 })
+					.limit(20)
+					.bindCriteria(criteria);
+			}
+
+			static findAllLast(user, flag = FLAGS.RECEIVER, criteria = {}) {
+				var userId = db.ObjectId(user),
+					query = {};
+
+				switch (flag) {
+					case FLAGS.AUTHOR: query.authorId = userId; break;
+					case FLAGS.RECEIVER: query.receivers = userId; break;
+				}
+
+				return Model
+					.find(Message, query)
+					.sort({ createdAt: -1 })
+					.limit(20)
+					.bindCriteria(criteria);
 			}
 
 			static find(query) {

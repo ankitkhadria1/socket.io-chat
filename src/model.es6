@@ -18,7 +18,7 @@ class Model extends EventEmitter {
 
 		this._id = new db.ObjectID();
 		this.isNew = true;
-
+		console.log('defaults', this.defaults());
 		_.each(this.defaults(), (value, key) => {
 			this[key] = props[key] ? props[key] : value;
 		});

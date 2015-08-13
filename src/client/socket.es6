@@ -1,4 +1,4 @@
-import ClientError  from './error';
+import ClientError  from '../error';
 import debugBase    from 'debug';
 
 var debug = debugBase('develop');
@@ -452,12 +452,51 @@ class ClientSocket {
 				this.emitError(socket, client.EVENTS.CHANGETITLE, { message: catchErrorMessage(error) });
 			});
 	}
+
+	onReadMessage(client, socket, data = {}) {
+		var chat;
+
+		if (!data.messagesId) {
+			messagesId = [];
+		}
+
+		data.messagesId = data.messagesId.slice(0, 10);
+		
+		Promise.all([
+			client.model('chat').findOne({ _id: data.chatId, members: socket.user }).exec(),
+			client.model('message').find({ 
+				_id: { $in: data.messagesId }, 
+				chatId: data.chatId, 
+				receivers: socket.user,
+				read: { $nin: data.messagesId }
+			}).exec()
+		])
+		.then((results) => {
+			var messages = results[1];
+			chat = results[0];
+
+			if (!chat) {
+				throw new ClientError('Chat not found');
+			}
+
+			return Promise.all(messages.map(function (message) {
+				return client.readMessage(chat, message, socket.user);
+			}));
+		})
+		.then((results) => {
+			sockets = client.members.get(chat.get('members'));
+			sockets.forEach((socket) => {
+				this.emitResult(socket, client.EVENTS.READMESSAGE, {
+					message:   'Message readed',
+					messagesId: results.map(function (message) { return message._id }),
+					chatId:  	chat._id
+				});
+			});
+		})
+		.catch((error) => {
+			this.emitError(socket, client.EVENTS.READMESSAGE, { message: catchErrorMessage(error) });
+		});
+	}
 }
 
 export default ClientSocket;
-
-client.on(client.EVENTS.CREATE)
-	.then(request.onCreate)
-	.then(client.create)
-	.then(response.onCreate)
-	.catch(next);

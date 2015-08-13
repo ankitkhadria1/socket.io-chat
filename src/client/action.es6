@@ -1,6 +1,6 @@
 import _ from 'underscore';
-import FLAGS from './flags';
-import ClientError from './error';
+import FLAGS from '../flags';
+import ClientError from '../error';
 
 class ClientAction {
 	constructor() {

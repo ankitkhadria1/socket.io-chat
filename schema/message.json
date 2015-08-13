@@ -12,6 +12,10 @@
       "items": { "type": "object" },
       "default": "Array"
     },
+    "read": {
+      "type": "array",
+      "default": "Array"
+    },
     "attachments": {
       "type": "array",
       "items": {

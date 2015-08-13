@@ -1,9 +1,15 @@
-'use strict';
+l'use strict';
 
-export function chatMessagesInc (data) {
-	data.chat.fill('lastMessageAt', new Date(), true);
-	data.chat.fill('countMessages', data.chat.get('countMessages') + 1, true);
-	data.chat.save();
+export function chatMessagesInc (options) {
+	var count = options.chat.get('countMessages');
+
+	if (!count) {
+		count = 0;
+	}
+
+	options.chat.fill('lastMessageAt', new Date(), true);
+	options.chat.fill('countMessages', count + 1, true);
+	options.chat.save();
 }
 
 export function singlePrivateChat (options, next) {
@@ -12,7 +18,6 @@ export function singlePrivateChat (options, next) {
 			.then(function (equalChat) {
 				equalChat && (options.chat = equalChat);
 				equalChat && (options.chat.isEqual = true);
-				console.log('next');
 				next();
 			})
 			.catch(next);
@@ -28,6 +33,24 @@ export function newChatOnGroup (options, next) {
 	chat.set(options.chat.toJSON());
 
 	options.chat = chat;
+
+	next();
+}
+
+export function activeReadMessage (options, next) {
+	var sockets;
+
+	if (!options.message.read) {
+		options.message.set('read', []);
+	}
+
+	this.members.get(options.chat.get('members').map(String))
+		.filter(function (socket) {
+			return !!socket.isActive || String(socket.user) === String(options.message.authorId);
+		})
+		.forEach(function (socket) {
+			options.message.read.push(socket.user);
+		});
 
 	next();
 }
