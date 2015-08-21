@@ -29,7 +29,7 @@ class Client extends BaseClient {
 	 * @param {string} options.data.name
 	 */
 	newChat(options = {}) {
-		this.useMiddleware(EVENT_NEW_CHAT, options)
+		return this.useMiddleware(EVENT_NEW_CHAT, options)
 			.then((postOptions) => {
 
 			})
@@ -42,7 +42,7 @@ class Client extends BaseClient {
 	 * @param {string}   options.data.text
 	 */
 	newMessage(options = {}) {
-		this.useMiddleware(EVENT_NEW_CHAT, options)
+		return this.useMiddleware(EVENT_NEW_CHAT, options)
 			.then((postOptions) => {
 				this.getChat(postOptions.chatId)
 			})
