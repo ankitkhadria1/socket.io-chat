@@ -11,7 +11,6 @@
       "minLength": 3,
       "default": "String"
     },
-    "title": { "type": "string", "default": "String" },
     "type": {
       "enum": [
         "private",

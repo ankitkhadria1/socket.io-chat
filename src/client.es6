@@ -20,7 +20,9 @@ class Client extends BaseClient {
 			this.socketAuthorized(socket) && this.newMessage(data);
 		});
 
-		this.initialize();
+		if (!options.delayInitialize) {
+			this.initialize();
+		}
 	}
 
 	/**
@@ -47,6 +49,8 @@ class Client extends BaseClient {
 				this.getChat(postOptions.chatId)
 			})
 	}
+
+	systemNotification() {}
 
 	// Must be overridden
 	authorize(client, socket, data) {

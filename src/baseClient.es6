@@ -6,16 +6,40 @@ import ChatModel    from './models/chat';
 import MessageModel from './models/message';
 import Members      from './members';
 import Rooms        from './rooms';
-import Memory		from './memory';
+import Memory        from './memory';
+
+const EVENT_NEW_MESSAGE = 'newMessage';
 
 const IO_CONNECTION = 'connection';
 const SOCKET_USER   = 'user';
 
-const OPTION_IO                   = 'io';
-const OPTION_EVENT_PREFIX         = 'eventPrefix';
-const OPTION_CHAT_MEMORY          = 'chatMemory';
-const OPTION_CHAT_MEMORY_TTL      = 'chatMemoryTtl';
-const OPTION_CHAT_MEMORY_PROVIDER = 'chatMemoryProvider';
+const OPTION_IO = 'io';
+
+const OPTION_EVENT_PREFIX = 'eventPrefix';
+
+const OPTION_RECORD_ACTIVE            = 'recordActive';
+const OPTION_RECORD_ACTIVE_PER_MEMBER = 'recordActivePerMember';
+
+const OPTION_CHAT_MEMORY                     = 'chatMemory';
+const OPTION_CHAT_MEMORY_TTL                 = 'chatMemoryTtl';
+const OPTION_CHAT_MEMORY_PROVIDER            = 'chatMemoryProvider';
+const OPTION_CHAT_RECORD_COUNT_MESSAGES      = 'chatRecordCountMessages';
+const OPTION_CHAT_RECORD_LAST_MESSAGES       = 'chatRecordLastMessages';
+const OPTION_CHAT_RECORD_LAST_MESSAGES_COUNT = 'chatRecordLastMessagesCount';
+const OPTION_CHAT_SINGLE_PRIVATE             = 'chatSinglePrivate';
+const OPTION_CHAT_NEW_ON_GROUP               = 'chatNewOnGroup';
+const OPTION_CHAT_AUTOREAD_ON_ACTIVE         = 'chatAutoreadOnActive';
+const OPTION_CHAT_SYSTEM_NOTIFICATION        = 'chatSystemNotification';
+const OPTION_CHAT_MEMBER_WRITE               = 'chatMemberWrite';
+
+const OPTION_MESSAGE_RECORD_READ    = 'messageRecordRead';
+const OPTION_MESSAGE_RECORD_DELETE  = 'messageRecordDelete';
+const OPTION_MESSAGE_RECORD_MEMBERS = 'messageRecordMembers';
+const OPTION_MESSAGE_RECORD_EDIT    = 'messageRecordEdit';
+
+const OPTION_MEMBER_ONLINE   = 'memberOnline';
+const OPTION_MEMBER_STATUS   = 'memberStatus';
+const OPTION_MEMBER_CONTACTS = 'memberContacts';
 
 class BaseClient extends EventEmitter {
 	constructor(server, options = {}) {
@@ -23,7 +47,7 @@ class BaseClient extends EventEmitter {
 
 		this.__middleware = [];
 
-		this._options = options;
+		this._options = _.clone(options);
 
 		if (!server) {
 			throw new Error('first argument required `http` server');
@@ -31,7 +55,7 @@ class BaseClient extends EventEmitter {
 
 		this.EVENTS = Object.create(null);
 
-		this._io = io = IO(server, _.extend({ maxHttpBufferSize: 1000 }, this._options[OPTION_IO] || {}));
+		this._io = IO(server, _.extend({ maxHttpBufferSize: 1000 }, this._options[OPTION_IO] || {}));
 		this.rooms   = new Rooms();
 		this.members = new Members();
 	}
@@ -50,13 +74,41 @@ class BaseClient extends EventEmitter {
 			});
 		});
 
+		if (this._options[OPTION_CHAT_RECORD_COUNT_MESSAGES]) {
+			if (!this._options.chat) {
+				this._options.chat = {};
+			}
+
+			if (!this._options.chat.schema) {
+				this._options.chat.schema = {
+					properties: {}
+				}
+			}
+
+			this._options.chat.schema.properties.countMessages = {
+				"type": "number",
+				'default': "Number"
+			};
+
+			this.use(EVENT_NEW_MESSAGE, function (options) {
+				if (typeof options.chat.countMessages === 'undefined' || options.chat.countMessages === null) {
+					options.chat.countMessages = 0;
+				}
+
+				options.chat.countMessages++;
+			});
+		}
+
 		this.__models = {
-			Chat:    ChatModel(options.chat || {}),
-			Message: MessageModel(options.message || {})
+			Chat:    ChatModel(this._options.chat || {}),
+			Message: MessageModel(this._options.message || {})
 		};
 
 		if (this._options[OPTION_CHAT_MEMORY]) {
-			this._memoryChat = new Memory({ provider: this._options[OPTION_CHAT_MEMORY_PROVIDER], ttl: this._options[OPTION_CHAT_MEMORY_TTL] });
+			this._memoryChat = new Memory({
+				provider: this._options[OPTION_CHAT_MEMORY_PROVIDER],
+				ttl:      this._options[OPTION_CHAT_MEMORY_TTL]
+			});
 		}
 	}
 

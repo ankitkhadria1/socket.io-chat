@@ -12,6 +12,12 @@ class ProviderMap extends Provider {
 
 		this.chatsMap    = new Map();
 		this.messagesMap = new Map();
+
+		this._timeoutid = null;
+	}
+
+	updateNear() {
+		this._timeoutid = setTimeout(function () {}, 1);
 	}
 
 	hasChat(chatModel) {
