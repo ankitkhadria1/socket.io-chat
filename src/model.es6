@@ -1,12 +1,12 @@
-import _ 				from 'underscore';
-import db 				from './db';
-import { Validator } 	from 'jsonschema';
-import { EventEmitter } from 'events';
-import debugBase 		from 'debug';
-import schemaLoader 	from './schema';
+import _                from 'underscore';
+import db               from './db';
+import { Validator }    from 'jsonschema';
+import EventEmitter     from 'events';
+import debugBase        from 'debug';
+import SchemaLoader     from './schema';
 import QueryResolver    from './queryResolver2';
 
-var debug = debugBase('develop');
+var debug  = debugBase('develop');
 var sl     = Array.prototype.slice;
 var typeOf = function (object) {
 	return Object.prototype.toString.call(object).replace(/\[object\s(\w+)\]/, '$1');
@@ -16,7 +16,7 @@ class Model extends EventEmitter {
 	constructor(props = {}) {
 		super();
 
-		this._id = new db.ObjectID();
+		this._id   = new db.ObjectID();
 		this.isNew = true;
 
 		_.each(this.defaults(), (value, key) => {
@@ -42,7 +42,7 @@ class Model extends EventEmitter {
 			db.getConnect((connect) => {
 				connect.collection(this.collection()).insert(this.toJSON(), {}, (error, result) => {
 					if (!error) {
-						this.isNew = false;
+						this.isNew     = false;
 						this.__atomics = {};
 					}
 
@@ -83,7 +83,7 @@ class Model extends EventEmitter {
 
 				connect.collection(this.collection()).update(query, data, (error, result) => {
 					if (!error) {
-						this.isNew = false;
+						this.isNew     = false;
 						this.__atomics = {};
 					}
 
@@ -130,28 +130,16 @@ class Model extends EventEmitter {
 	setSchema(schema) {
 		this.schema = schema;
 
-		var readonlyAttrs = [];
-		var path          = [];
-
-		function walk(properties) {
-			_.each(properties, (prop, key) => {
-				path.push(key);
-
-				if (prop.readonly) {
-					readonlyAttrs.push(path.join('.'));
-				}
-
-				if (prop.properties) {
-					walk(prop.properties);
-				} else {
-					path = [];
-				}
-			});
-		}
-
-		walk(this.schema.properties);
+		var readonlyAttrs = SchemaLoader.readOnly(this.schema);
+		let indexes       = SchemaLoader.index(this.schema);
 
 		this.__readonlyAttrs = readonlyAttrs;
+
+		for (indexName of indexes) {
+			// ensure index
+		}
+
+		return this;
 	}
 
 	getSchema() {
@@ -214,7 +202,7 @@ class Model extends EventEmitter {
 
 	$addToSet(field, value, isEach = false) {
 		isEach
-			? this.get(field) && this.__addAtomic('addToSet', field,{ $each: value })
+			? this.get(field) && this.__addAtomic('addToSet', field, { $each: value })
 			: this.get(field) && this.__addAtomic('addToSet', field, value);
 	}
 
@@ -229,7 +217,8 @@ class Model extends EventEmitter {
 
 		if (_.isObject(value) && Object.keys(value).length === 1 && /^\$/.test(Object.keys(value)[0])) {
 			switch (Object.keys(value)[0]) {
-				case '$each': {
+				case '$each':
+				{
 					if (!this.__atomics['$' + type][field]) {
 						this.__atomics['$' + type][field] = { $each: [] }
 					}
@@ -265,7 +254,7 @@ class Model extends EventEmitter {
 	static update() {
 		db.getConnect((connect) => {
 			let collection = connect.collection(this.collection());
-			
+
 			collection.update.apply(collection, Array.prototype.slice.call(arguments));
 		})
 	}

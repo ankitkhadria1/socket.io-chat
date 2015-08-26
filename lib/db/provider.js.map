@@ -1,0 +1,1 @@
+{"version":3,"sources":["../../src/db/provider.es6"],"names":[],"mappings":";;;;;;;;IAAqB,QAAQ,GACjB,SADS,QAAQ,GACd;uBADM,QAAQ;CAG3B;;qBAHmB,QAAQ","file":"provider.js","sourcesContent":["export default class Provider {\n\tconstructor() {\n\n\t}\n}"]}

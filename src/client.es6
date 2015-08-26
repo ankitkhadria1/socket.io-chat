@@ -1,60 +1,69 @@
-import BaseClient from "./baseClient";
-
-const EVENT_AUTHENTICATE = 'authenticate';
-const EVENT_NEW_CHAT     = 'newChat';
-const EVENT_NEW_MESSAGE  = 'newMessage';
+import BaseClient       from "./baseClient";
+import * as middleWares from './middlewares';
+import * as EVENT       from './events';
+import * as OPTION      from './options';
 
 class Client extends BaseClient {
 	constructor(server, options) {
 		super(server, options);
 
-		this.addEvent(EVENT_AUTHENTICATE, (socket, data) => {
-			this.socketAuthorized(socket) && this.authorize && this.authorize(this, socket, data);
-		});
+		this
+			.addEvent(EVENT.AUTHENTICATE, this.onAuthenticate)
+			.addEvent(EVENT.NEW_CHAT, this.socketAuthorized, this.newChat)
+			.addEvent(EVENT.NEW_MESSAGE, this.socketAuthorized, this.newMessage)
+			.addEvent(EVENT.START_WRITE, this.socketAuthorized, this.onStartWrite)
+			.addEvent(EVENT.END_WRITE, this.socketAuthorized, this.onEndWrite)
+			.addEvent(EVENT.FOCUS, this.socketAuthorized, this.onFocus)
+			.addEvent(EVENT.BLUR, this.socketAuthorized, this.onBlur)
+		;
 
-		this.addEvent(EVENT_NEW_CHAT, (socket, data) => {
-			this.socketAuthorized(socket) && this.newChat(data);
-		});
+		if (this._options[OPTION.CHAT_RECORD_COUNT_MESSAGES]) {
+			this.applyMiddleware(middleWares.chatRecordCountMessages);
+		}
 
-		this.addEvent(EVENT_NEW_MESSAGE, (socket, data) => {
-			this.socketAuthorized(socket) && this.newMessage(data);
-		});
+		if (this._options[OPTION.CHAT_RECORD_LAST_MESSAGES]) {
+			this.applyMiddleware(middleWares.chatRecordLastMessages);
+		}
+
+		if (this._options[OPTION.CHAT_SINGLE_PRIVATE]) {
+			this.applyMiddleware(middleWares.chatSinglePrivate);
+		}
+
+		if (this._options[OPTION.CHAT_NEW_ON_GROUP]) {
+			this.applyMiddleware(middleWares.chatNewOnGroup);
+		}
 
 		if (!options.delayInitialize) {
 			this.initialize();
 		}
 	}
 
-	/**
-	 * @param {object} options
-	 * @param {object} options.data
-	 * @param {string} options.data.name
-	 */
+	onAuthenticate(options = {}) {
+		return this.useMiddleware(EVENT.AUTHENTICATE, options)
+			.then(function () {
+
+			})
+	}
+
 	newChat(options = {}) {
-		return this.useMiddleware(EVENT_NEW_CHAT, options)
+		return this.useMiddleware(EVENT.NEW_CHAT, options)
 			.then((postOptions) => {
 
 			})
 	}
 
-	/**
-	 * @param {object}   options
-	 * @param {ObjectId} options.chatId
-	 * @param {object}   options.data
-	 * @param {string}   options.data.text
-	 */
 	newMessage(options = {}) {
-		return this.useMiddleware(EVENT_NEW_CHAT, options)
+		return this.useMiddleware(EVENT.NEW_CHAT, options)
 			.then((postOptions) => {
 				this.getChat(postOptions.chatId)
 			})
 	}
 
-	systemNotification() {}
+	systemNotification() {
+	}
 
-	// Must be overridden
-	authorize(client, socket, data) {
-		socket.auth = false;
+	authorize(callback) {
+
 	}
 }
 

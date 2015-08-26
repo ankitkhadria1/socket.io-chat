@@ -1,27 +1,121 @@
-export function chatRecordCountMessages (options, next) {
-	if (typeof options.chat.countMessages === 'undefined' || options.chat.countMessages === null) {
-		options.chat.set('countMessages', 0);
+import deepExtend  from 'deep-extend';
+import * as EVENT  from './events';
+import * as OPTION from './options';
+
+class Middleware {
+	constructor() {
+
 	}
-
-	options.chat.countMessages++;
-
-	next();
 }
 
-export function chatRecordLastMessages (options, next) {
-	let count = 10;
+export default Middleware;
 
-	if (this._options[chatRecordLastMessagesCount]) {
-		count = parseInt(this._options[chatRecordLastMessagesCount], 10) || 10;
+export class chatRecordLastMessages extends Middleware {
+	static event (){
+		return EVENT.NEW_MESSAGE;
 	}
 
-	if (!options.chat.lastMessages) {
-		options.chat.set('lastMessages', []);
+	constructor(client) {
+		super();
+
+		this.client = client;
+		this.count = this.client._options[OPTION.CHAT_RECORD_LAST_MESSAGES_COUNT] || 10;
+
+		deepExtend(client._options, {
+			chat: {
+				schema: {
+					properties: {
+						countMessages: {
+							"type":    "number",
+							'default': "Number"
+						}
+					}
+				}
+			}
+		});
 	}
 
-	if (options.chat.lastMessages.length > count) {
-		options.chat.$pull('lastMessages.0')
+
+	exec(options, next) {
+		if (!options.chat.lastMessages) {
+			options.chat.set('lastMessages', []);
+		}
+
+		if (options.chat.lastMessages.length > this.count) {
+			options.chat.$pull('lastMessages.0')
+		}
+
+		options.chat.$push('lastMessages', options.message.toJSON());
+
+		next();
+	}
+}
+
+export class chatRecordCountMessages extends Middleware {
+	static event (){
+		return EVENT.NEW_MESSAGE;
 	}
 
-	options.chat.$push('lastMessages', options.message.toJSON());
+	constructor(client) {
+		super();
+	}
+
+	exec(options, next) {
+		if (typeof options.chat.countMessages === 'undefined' || options.chat.countMessages === null) {
+			options.chat.set('countMessages', 0);
+		}
+
+		options.chat.countMessages++;
+
+		next();
+	}
+}
+
+export class chatSinglePrivate extends Middleware {
+	static event (){
+		return EVENT.NEW_CHAT;
+	}
+
+	constructor(client) {
+		super();
+		this.client = client;
+	}
+
+	exec(options, next) {
+		if (options.chat.type === 'private') {
+			this.client.model.Chat.findEqual(options.chat)
+				.then(function (equalChat) {
+					equalChat && (options.chat = equalChat);
+					equalChat && (options.chat.isEqual = true);
+					next();
+				})
+				.catch(next);
+		} else {
+			next();
+		}
+	}
+}
+
+export class chatNewOnGroup extends Middleware {
+	static event (){
+		return EVENT.ADD_MEMBER;
+	}
+
+	constructor(client) {
+		super();
+		this.client = client;
+	}
+
+	exec(options, next) {
+		var chat;
+
+		if (options.chat.type === 'group' && options.chat.members.length === 2) {
+			chat = new this.client.model.Chat();
+			chat.set(options.chat.toJSON());
+
+			options.chat = chat;
+		}
+
+		next();
+	}
 }

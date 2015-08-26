@@ -1,71 +1,69 @@
-import IO           from 'socket.io';
-import EventEmitter from 'events';
-import _            from 'underscore';
-import { debug }    from './debug';
-import ChatModel    from './models/chat';
-import MessageModel from './models/message';
-import Members      from './members';
-import Rooms        from './rooms';
-import Memory        from './memory';
-
-const EVENT_NEW_MESSAGE = 'newMessage';
+import IO               from 'socket.io';
+import EventEmitter     from 'events';
+import _                from 'underscore';
+import deepExtend       from 'deep-extend';
+import { debug }        from './debug';
+import ChatModel        from './models/chat';
+import MessageModel     from './models/message';
+import Members          from './members';
+import Rooms            from './rooms';
+import Memory           from './memory';
+import Db               from './db/index';
+import * as chain		from './chain';
+import * as middleWares from './middlewares';
+import * as OPTION      from './options';
+import * as EVENT       from './events';
 
 const IO_CONNECTION = 'connection';
 const SOCKET_USER   = 'user';
-
-const OPTION_IO = 'io';
-
-const OPTION_EVENT_PREFIX = 'eventPrefix';
-
-const OPTION_RECORD_ACTIVE            = 'recordActive';
-const OPTION_RECORD_ACTIVE_PER_MEMBER = 'recordActivePerMember';
-
-const OPTION_CHAT_MEMORY                     = 'chatMemory';
-const OPTION_CHAT_MEMORY_TTL                 = 'chatMemoryTtl';
-const OPTION_CHAT_MEMORY_PROVIDER            = 'chatMemoryProvider';
-const OPTION_CHAT_RECORD_COUNT_MESSAGES      = 'chatRecordCountMessages';
-const OPTION_CHAT_RECORD_LAST_MESSAGES       = 'chatRecordLastMessages';
-const OPTION_CHAT_RECORD_LAST_MESSAGES_COUNT = 'chatRecordLastMessagesCount';
-const OPTION_CHAT_SINGLE_PRIVATE             = 'chatSinglePrivate';
-const OPTION_CHAT_NEW_ON_GROUP               = 'chatNewOnGroup';
-const OPTION_CHAT_AUTOREAD_ON_ACTIVE         = 'chatAutoreadOnActive';
-const OPTION_CHAT_SYSTEM_NOTIFICATION        = 'chatSystemNotification';
-const OPTION_CHAT_MEMBER_WRITE               = 'chatMemberWrite';
-
-const OPTION_MESSAGE_RECORD_READ    = 'messageRecordRead';
-const OPTION_MESSAGE_RECORD_DELETE  = 'messageRecordDelete';
-const OPTION_MESSAGE_RECORD_MEMBERS = 'messageRecordMembers';
-const OPTION_MESSAGE_RECORD_EDIT    = 'messageRecordEdit';
-
-const OPTION_MEMBER_ONLINE   = 'memberOnline';
-const OPTION_MEMBER_STATUS   = 'memberStatus';
-const OPTION_MEMBER_CONTACTS = 'memberContacts';
 
 class BaseClient extends EventEmitter {
 	constructor(server, options = {}) {
 		super();
 
-		this.__middleware = [];
-
-		this._options = _.clone(options);
-
 		if (!server) {
 			throw new Error('first argument required `http` server');
 		}
 
-		this.EVENTS = Object.create(null);
+		if (!options.db) {
+			throw new Error('options required `db` section');
+		}
 
-		this._io = IO(server, _.extend({ maxHttpBufferSize: 1000 }, this._options[OPTION_IO] || {}));
-		this.rooms   = new Rooms();
-		this.members = new Members();
+		if (!options.db.connect) {
+			throw new Error('options.db required `connect`');
+		}
+
+		//if (!options.db.provider) {
+		//	throw new Error('options.db required `provider` (mongodb)');
+		//}
+
+		this.__middleware = [];
+		this._options     = _.clone(options);
+		this._io          = IO(server, _.extend({ maxHttpBufferSize: 1000 }, this._options[OPTION.IO] || {}));
+		this.EVENTS       = Object.create(null);
+		this.rooms        = new Rooms();
+		this.members      = new Members();
 	}
 
 	initialize() {
+		this.emit('pre-initialize');
+
+		this.addEvent(EVENT.EVENTS, function (socket, data) {
+
+		});
+
+		this._db = new Db(this._options.db);
 		this._io.on(IO_CONNECTION, (socket) => {
+			let _client = this;
+
+			let wrapEventCallback = function (data) {
+				_client.invoke('someName', this, data);
+			};
+
 			for (let name in this.EVENTS) {
 				let eventName = this.eventName(name);
 
-				socket.on(eventName, this.EVENTS[eventName]);
+				socket.on(eventName, wrapEventCallback);
 			}
 
 			socket.on('disconnect', () => {
@@ -74,63 +72,56 @@ class BaseClient extends EventEmitter {
 			});
 		});
 
-		if (this._options[OPTION_CHAT_RECORD_COUNT_MESSAGES]) {
-			if (!this._options.chat) {
-				this._options.chat = {};
-			}
-
-			if (!this._options.chat.schema) {
-				this._options.chat.schema = {
-					properties: {}
-				}
-			}
-
-			this._options.chat.schema.properties.countMessages = {
-				"type": "number",
-				'default': "Number"
-			};
-
-			this.use(EVENT_NEW_MESSAGE, function (options) {
-				if (typeof options.chat.countMessages === 'undefined' || options.chat.countMessages === null) {
-					options.chat.countMessages = 0;
-				}
-
-				options.chat.countMessages++;
-			});
-		}
-
 		this.__models = {
-			Chat:    ChatModel(this._options.chat || {}),
-			Message: MessageModel(this._options.message || {})
+			Chat:    ChatModel(this._db, this._options.chat || {}),
+			Message: MessageModel(this._db, this._options.message || {})
 		};
 
-		if (this._options[OPTION_CHAT_MEMORY]) {
+		if (this._options[OPTION.CHAT_MEMORY]) {
 			this._memoryChat = new Memory({
-				provider: this._options[OPTION_CHAT_MEMORY_PROVIDER],
-				ttl:      this._options[OPTION_CHAT_MEMORY_TTL]
+				provider: this._options[OPTION.CHAT_MEMORY_PROVIDER],
+				ttl:      this._options[OPTION.CHAT_MEMORY_TTL]
 			});
 		}
+
+		this.emit('initialize');
 	}
 
-	getIo() {
+	get io() {
 		return this._io;
 	}
 
-		get model = () => {
+	get model() {
 		return this.__models;
-	};
+	}
 
-	use(path, callback) {
+	applyMiddleware(_Middleware) {
+		if (!_Middleware.event) {
+			debug('middleware not specified event name');
+			return this;
+		}
+
+		_.isFunction(_Middleware)
+			? this.use(_Middleware.event, _Middleware)
+			: this.use(_Middleware.event, new _Middleware(this));
+
+
+		return this;
+	}
+
+	use(path, middleware) {
 		if (!this.__middleware[path]) {
 			this.__middleware[path] = [];
 		}
 
-		if (!(callback instanceof Function)) {
-			debug('use: callback is not a function');
-			return this;
-		}
+		if (_.isArray(middleware))
+			middleware.forEach((_middleware) => { this.__middleware[path].push(_middleware); });
 
-		this.__middleware[path].push(callback);
+		if (middleware.exec)
+			if (_.isArray(middleware.exec))
+				middleware.exec.forEach((_middleware) => { this.__middleware[path].push(_middleware); });
+			else
+				this.__middleware[path].push(middleware.exec);
 
 		return this;
 	}
@@ -152,48 +143,62 @@ class BaseClient extends EventEmitter {
 		return this;
 	}
 
-	useMiddleware(path, data) {
-		var middleware = this.__middleware[path] || [],
-			index      = 0;
+	execMiddleware(path, data) {
+		var middleware = this.__middleware[path] || [];
 
-		return new Promise((resolve, reject) => {
-			function next(error) {
-				if (typeof error !== "undefined") {
-					return reject(error);
-				}
-
-				var validation = middleware[index];
-
-				if (validation) {
-					index++;
-					return validation(data, next);
-				}
-
-				if (index === middleware.length) {
-					return resolve(data);
-				}
-			}
-
-			next();
-		});
+		return chain.exec(middleware, data);
 	}
 
-	addEvent(name, callback, force = false) {
-		if (name in this.EVENTS && !force) {
-			debug('addEvent: the specified name is already taken');
-			return false;
+	invoke(name, socket, data) {
+		let promise = (resolve, reject) => {
+
+			if (!(name in this.EVENTS)) {
+				return reject();
+			}
+
+
+		};
+
+		return new Promise(promise);
+	}
+
+	addEvent(name) {
+		var callbacks = Array.prototype.slice.call(arguments, 1);
+
+		if (!this.EVENTS[name]) {
+			this.EVENTS[name] = [];
 		}
 
-		if (force) {
-			debug('addEvent: force override EVENT: ' + name);
+		callbacks.forEach(function (callback) {
+			if (callback instanceof Function) {
+				this.EVENTS[name].push(callback)
+			}
+		});
+
+		return this;
+	}
+
+	removeEvent(name) {
+		var callbacks = Array.prototype.slice.call(arguments, 1);
+
+		if (!this.EVENTS[name]) {
+			this.EVENTS[name] = [];
 		}
 
-		return callback && (this.EVENTS[name] = callback);
+		callbacks.forEach(function (callback) {
+			let indexCb;
+
+			if ((indexCb = this.EVENTS[name].indexOf(callback)) !== -1) {
+				this.EVENTS[name].splice(indexCb, 1);
+			}
+		});
+
+		return this;
 	}
 
 	eventName(name) {
-		if (this._options[OPTION_EVENT_PREFIX]) {
-			let prefix = this._options[OPTION_EVENT_PREFIX];
+		if (this._options[OPTION.EVENT_PREFIX]) {
+			let prefix = this._options[OPTION.EVENT_PREFIX];
 
 			return name.replace(/^(\w)/, function (firstChar) {
 				return prefix + firstChar.toUpperCase();
@@ -214,7 +219,7 @@ class BaseClient extends EventEmitter {
 
 	getChat(id) {
 		return new Promise((resolve, rejcet) => {
-			if (OPTION_CHAT_MEMORY in this._options) {
+			if (OPTION.CHAT_MEMORY in this._options) {
 
 			} else {
 				this.model.Chat.findById(id).then((chat) => {

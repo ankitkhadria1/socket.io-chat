@@ -1,0 +1,1 @@
+{"version":3,"sources":["../../src/memory/provider.es6"],"names":[],"mappings":";;;;;;;;IAAM,QAAQ,YAAR,QAAQ;wBAAR,QAAQ;;;qBAIC,QAAQ","file":"provider.js","sourcesContent":["class Provider {\n\n}\n\nexport default Provider;"]}

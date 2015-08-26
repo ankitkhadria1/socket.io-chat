@@ -1,0 +1,9 @@
+export const AUTHENTICATE = 'authenticate';
+export const NEW_CHAT     = 'newChat';
+export const NEW_MESSAGE  = 'newMessage';
+export const START_WRITE  = 'startWrite';
+export const END_WRITE    = 'endWrite';
+export const FOCUS        = 'focus';
+export const BLUR         = 'blur';
+export const ADD_MEMBER   = 'addMember';
+export const EVENTS		  = 'events';

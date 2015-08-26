@@ -1,0 +1,1 @@
+{"version":3,"sources":["../src/debug.es6"],"names":[],"mappings":";;;;;;;;qBAA0B,OAAO;;;;AAE1B,IAAI,SAAS,GAAG,gBAAgB,CAAC;;AACjC,IAAI,KAAK,GAAG,wBAAU,SAAS,CAAC,CAAC","file":"debug.js","sourcesContent":["import baseDebug     from 'debug';\n\nexport var DEBUG_ENV = 'socket.io-chat';\nexport var debug = baseDebug(DEBUG_ENV);"]}
