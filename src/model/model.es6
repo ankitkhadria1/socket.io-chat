@@ -1,17 +1,29 @@
+import _ 			 from 'underscore';
 import { debug }     from '../debug';
 import clone         from 'clone';
-import deepExtend     from 'deep-extend';
+import deepExtend    from 'deep-extend';
 import QueryResolver from '../queryResolver';
 import SchemaLoader  from '../schema';
 
+import MArray from './array';
+
+var typeOf = function (object) {
+	return Object.prototype.toString.call(object).replace(/\[object\s(\w+)\]/, '$1');
+};
+
 export default class Model {
 	constructor() {
-
+		this.isNew = true;
+		this._atomics = {};
 	}
 
 	initialize(options = {}) {
-		this.defaults(this.schema());
-		this.readOnly(this.schema());
+		this.defaults = this.schema();
+		this.readOnly = this.schema();
+
+		this.set(this.defaults);
+
+		console.log(this.defaults);
 	}
 
 	static ensureIndex() {
@@ -31,7 +43,7 @@ export default class Model {
 	}
 
 	get defaults() {
-		return this._defaults;
+		return clone(this._defaults);
 	}
 
 	set readOnly(schema) {
@@ -51,11 +63,11 @@ export default class Model {
 			path = [key];
 		}
 
-		if (~this.defaults.indexOf(key) && !~this.readOnly.indexOf(path.join('.'))) {
+		if (this.defaults.hasOwnProperty(key) && !~this.readOnly.indexOf(path.join('.'))) {
 			this[key] = value;
 
 			if (~['Number', 'String', 'Data', 'Boolean', 'Object', 'Null'].indexOf(typeOf(value))) {
-				this.__addAtomic('set', key, value);
+				this.addAtomic('set', key, value);
 			}
 		}
 
@@ -75,11 +87,20 @@ export default class Model {
 			});
 		}
 
-		if (~this.defaults.indexOf(key)) {
-			this[key] = value;
+		if (this.defaults.hasOwnProperty(key)) {
+			switch (typeOf(value)) {
+				case 'Array':
+					this[key]       = new MArray();
+					this[key].model = this;
+					this[key].path  = key; // TODO: path with dot
+					this[key].push(...value);
+					break;
+				default:
+					this[key] = value;
+			}
 
 			if (isAtomic) {
-				this.__addAtomic('set', key, value);
+				this.addAtomic('set', key, value);
 			}
 		}
 
@@ -96,6 +117,37 @@ export default class Model {
 		}
 
 		return clone(output, true);
+	}
+
+	addAtomic(type, key, value) {
+		if (this.isNew) {
+			// TODO: if type is addToSet/push, this override initialized values
+			deepExtend(this._atomics, { '$set': { [key]: value } });
+			return this;
+		}
+
+		switch (type) {
+			case 'set':
+			case 'pull':
+			case 'pullAll':
+			case 'pop':
+				deepExtend(this._atomics, { ['$' + type]: { [key]: value } });
+				break;
+
+			case 'push':
+			case 'addToSet':
+				switch (typeOf(value)) {
+					case 'Array':
+						deepExtend(this._atomics, { ['$' + type]: { [key]: { $each: value } } });
+						break;
+					default:
+						deepExtend(this._atomics, { ['$' + type]: { [key]: value } });
+				}
+
+				break;
+		}
+
+		return this;
 	}
 
 	static find() {
