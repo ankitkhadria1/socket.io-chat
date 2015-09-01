@@ -1,4 +1,8 @@
 export default class MArray extends Array {
+	constructor(...args) {
+		super(...args);
+	}
+
 	set model(model) {
 		this._model = model;
 	}
