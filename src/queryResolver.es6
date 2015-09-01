@@ -1,15 +1,14 @@
-import extend 	 from 'extend';
-import db 		 from './db';
+import extend    from 'extend';
 import debugBase from 'debug';
-import _ 		 from 'underscore';
+import _         from 'underscore';
 
 class QueryResolver {
 	constructor(Model) {
 		this.__Model = Model;
 
-		this.__query = {};
+		this.__query    = {};
 		this.__criteria = {};
-		this.__select = {};
+		this.__select   = {};
 		this.__limit;
 		this.__sort;
 		this.__skip;
@@ -28,31 +27,36 @@ class QueryResolver {
 
 	static castSchemaValue(type, value) {
 		switch (type) {
-			case 'string':    return String(value);
-			case 'number':    return Number(value);
-			case 'date-time': return new Date(value) || null;
-			case 'object':    return key.toLowerCase().match(/id$/) ? (db.ObjectId(value) || null) : value; // TODO: check in schema
-			default:          return String(value);
+			case 'string':
+				return String(value);
+			case 'number':
+				return Number(value);
+			case 'date-time':
+				return new Date(value) || null;
+			case 'object':
+				return key.toLowerCase().match(/id$/) ? (this.__Model.db.ObjectId(value) || null) : value; // TODO: check in schema
+			default:
+				return String(value);
 		}
 	}
 
-	select (select = {}) {
+	select(select = {}) {
 		this.__select = select;
 	}
 
-	sort (sort = {}) {
+	sort(sort = {}) {
 		this.__sort = sort;
 
 		return this;
 	}
 
-	limit (limit) {
+	limit(limit) {
 		this.__limit = Math.abs(limit);
 
 		return this;
 	}
 
-	skip (skip) {
+	skip(skip) {
 		this.__skip = Math.abs(skip);
 
 		return this;
@@ -66,10 +70,10 @@ class QueryResolver {
 		this.__prev = new ObjectId(id);
 	}
 
-	bindCriteria (criteria = {}) {
+	bindCriteria(criteria = {}) {
 		criteria.limit && ( this.__criteria.limit = Math.abs(criteria.limit) );
-		criteria.next  && ( this.__criteria.next = criteria.next );
-		criteria.prev  && ( this.__criteria.prev = criteria.prev );
+		criteria.next && ( this.__criteria.next = criteria.next );
+		criteria.prev && ( this.__criteria.prev = criteria.prev );
 
 		if (criteria.filter) {
 			if (!_.isObject(criteria.filter)) {
@@ -116,7 +120,7 @@ class QueryResolver {
 		return this;
 	}
 
-	find (query = {}, select = {}, options = {}) {
+	find(query = {}, select = {}, options = {}) {
 		this.__query = query;
 		this.select(select);
 
@@ -125,7 +129,7 @@ class QueryResolver {
 		return this;
 	}
 
-	findOne (query = {}, select = {}) {
+	findOne(query = {}, select = {}) {
 		this.__query = query;
 		this.select(select);
 
@@ -134,45 +138,44 @@ class QueryResolver {
 		return this;
 	}
 
-	exec (options = {}) {
+	exec(options = {}) {
 		let castResult = (res) => {
 			return options.lean ? res : (res && this.__Model.fill(res));
-		}
+		};
 
 		return new Promise((resolve, reject) => {
-			db.getConnect((connect) => {
-				let cursor = connect.collection(this.__Model.collection());
+			let cursor = this.__Model.db.connect.collection(this.__Model.collection());
 
-				switch (this._findType) {
-					case 'find': 
-						if (this.__next || this.__prev) {
-							if (!this.__query.$and) {
-								this.__query.$and = [];
-							}
-
-							this.__next && this.__query.$and.push({ _id: { $gt: this.__next } });
-							this.__prev && this.__query.$and.push({ _id: { $lt: this.__prev } });
+			switch (this._findType) {
+				case 'find':
+					if (this.__next || this.__prev) {
+						if (!this.__query.$and) {
+							this.__query.$and = [];
 						}
 
-					 	cursor = cursor.find(this.__query);
+						this.__next && this.__query.$and.push({ _id: { $gt: this.__next } });
+						this.__prev && this.__query.$and.push({ _id: { $lt: this.__prev } });
+					}
 
-						this.__sort && cursor.sort(this.__sort);
-						this.__skip && cursor.skip(this.__skip);
-						this.__limit && cursor.limit(this.__limit);
-						
-						cursor.toArray((err, result) => {
-							return err ? reject(err) : resolve(result.map(castResult));
-						});
+					cursor = cursor.find(this.__query);
 
-						break;
-					case 'findOne':
-						cursor.findOne(this.__query, (err, result) => {
-							return err ? reject(err) : resolve(castResult(result));
-						});
-						break;
-					default: throw new Error('exec unknown findType')
-				}
-			});
+					this.__sort && cursor.sort(this.__sort);
+					this.__skip && cursor.skip(this.__skip);
+					this.__limit && cursor.limit(this.__limit);
+
+					cursor.toArray((err, result) => {
+						return err ? reject(err) : resolve(result.map(castResult));
+					});
+
+					break;
+				case 'findOne':
+					cursor.findOne(this.__query, (err, result) => {
+						return err ? reject(err) : resolve(castResult(result));
+					});
+					break;
+				default:
+					throw new Error('exec unknown findType')
+			}
 		})
 	}
 }

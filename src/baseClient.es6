@@ -9,7 +9,7 @@ import Members          from './members';
 import Rooms            from './rooms';
 import Memory           from './memory';
 import Db               from './db/index';
-import * as chain		from './chain';
+import * as chain        from './chain';
 import * as middleWares from './middlewares';
 import * as OPTION      from './options';
 import * as EVENT       from './events';
@@ -73,8 +73,8 @@ class BaseClient extends EventEmitter {
 		});
 
 		this.__models = {
-			Chat:    ChatModel(this._db, this._options.chat || {}),
-			Message: MessageModel(this._db, this._options.message || {})
+			Chat:    ChatModel(this, this._options.chat),
+			Message: MessageModel(this, this._options.message)
 		};
 
 		if (this._options[OPTION.CHAT_MEMORY]) {
@@ -115,11 +115,15 @@ class BaseClient extends EventEmitter {
 		}
 
 		if (_.isArray(middleware))
-			middleware.forEach((_middleware) => { this.__middleware[path].push(_middleware); });
+			middleware.forEach((_middleware) => {
+				this.__middleware[path].push(_middleware);
+			});
 
 		if (middleware.exec)
 			if (_.isArray(middleware.exec))
-				middleware.exec.forEach((_middleware) => { this.__middleware[path].push(_middleware); });
+				middleware.exec.forEach((_middleware) => {
+					this.__middleware[path].push(_middleware);
+				});
 			else
 				this.__middleware[path].push(middleware.exec);
 
