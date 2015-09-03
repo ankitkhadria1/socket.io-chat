@@ -5,7 +5,8 @@
 		"_id": {
 			"type": "object",
 			"default": "Object",
-			"index": 1
+			"index": 1,
+			"readonly": 1
 		},
 		"name": {
 			"type": "string",
@@ -20,22 +21,28 @@
 			"default": {
 				"type": "String",
 				"value": "private"
-			}
+			},
+			"readonly": 1
 		},
 		"creatorId": {
-			"type": "object",
-			"default": "null"
+			"type": "string",
+			"pattern": "^[a-z0-9]{12,24}$",
+			"default": "String",
+			"readonly": 1
 		},
 		"createdAt": {
 			"type": "date-time",
-			"default": "Date"
+			"default": "Date",
+			"readonly": 1
 		},
 		"members": {
 			"type": "array",
 			"items": {
-				"type": "object"
+				"type": "string",
+				"pattern": "^[a-z0-9]{12,24}$"
 			},
-			"default": "Array"
+			"default": "Array",
+			"readonly": 1
 		},
 		"systemMessages": {
 			"type": "object",

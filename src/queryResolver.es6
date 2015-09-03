@@ -34,7 +34,7 @@ class QueryResolver {
 			case 'date-time':
 				return new Date(value) || null;
 			case 'object':
-				return key.toLowerCase().match(/id$/) ? (this.__Model.db.ObjectId(value) || null) : value; // TODO: check in schema
+				return value.toLowerCase().match(/id$/) ? (this.__Model.db.ObjectId(value) || null) : value; // TODO: check in schema
 			default:
 				return String(value);
 		}
@@ -139,44 +139,7 @@ class QueryResolver {
 	}
 
 	exec(options = {}) {
-		let castResult = (res) => {
-			return options.lean ? res : (res && this.__Model.fill(res));
-		};
 
-		return new Promise((resolve, reject) => {
-			let cursor = this.__Model.db.connect.collection(this.__Model.collection());
-
-			switch (this._findType) {
-				case 'find':
-					if (this.__next || this.__prev) {
-						if (!this.__query.$and) {
-							this.__query.$and = [];
-						}
-
-						this.__next && this.__query.$and.push({ _id: { $gt: this.__next } });
-						this.__prev && this.__query.$and.push({ _id: { $lt: this.__prev } });
-					}
-
-					cursor = cursor.find(this.__query);
-
-					this.__sort && cursor.sort(this.__sort);
-					this.__skip && cursor.skip(this.__skip);
-					this.__limit && cursor.limit(this.__limit);
-
-					cursor.toArray((err, result) => {
-						return err ? reject(err) : resolve(result.map(castResult));
-					});
-
-					break;
-				case 'findOne':
-					cursor.findOne(this.__query, (err, result) => {
-						return err ? reject(err) : resolve(castResult(result));
-					});
-					break;
-				default:
-					throw new Error('exec unknown findType')
-			}
-		})
 	}
 }
 

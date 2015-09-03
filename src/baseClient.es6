@@ -14,6 +14,12 @@ import * as middleWares from './middlewares';
 import * as OPTION      from './options';
 import * as EVENT       from './events';
 
+require('source-map-support').install();
+
+var typeOf = function (object) {
+	return Object.prototype.toString.call(object).replace(/\[object\s(\w+)\]/, '$1');
+};
+
 const IO_CONNECTION = 'connection';
 const SOCKET_USER   = 'user';
 
@@ -33,13 +39,13 @@ class BaseClient extends EventEmitter {
 			throw new Error('options.db required `connect`');
 		}
 
-		//if (!options.db.provider) {
-		//	throw new Error('options.db required `provider` (mongodb)');
-		//}
+		if (!options.db.provider) {
+			throw new Error('options.db required `provider` (mongodb)');
+		}
 
 		this.__middleware = [];
 		this._options     = _.clone(options);
-		this._io          = IO(server, _.extend({ maxHttpBufferSize: 1000 }, this._options[OPTION.IO] || {}));
+		this._io          = IO(server, deepExtend({ maxHttpBufferSize: 1000 }, this._options[OPTION.IO] || {}));
 		this.EVENTS       = Object.create(null);
 		this.rooms        = new Rooms();
 		this.members      = new Members();
@@ -48,23 +54,37 @@ class BaseClient extends EventEmitter {
 	initialize() {
 		this.emit('pre-initialize');
 
-		this.addEvent(EVENT.EVENTS, function (socket, data) {
-
-		});
-
 		this._db = new Db(this._options.db);
 		this._io.on(IO_CONNECTION, (socket) => {
 			let _client = this;
 
-			let wrapEventCallback = function (data) {
-				_client.invoke('someName', this, data);
+			let wrapEventCallback = function (event, socket, data) {
+				_client.invoke(event, socket, data);
 			};
 
 			for (let name in this.EVENTS) {
-				let eventName = this.eventName(name);
+				let eventName = name;
 
-				socket.on(eventName, wrapEventCallback);
+				socket.on(eventName, (function (event) {
+					return function (data = {}) {
+						wrapEventCallback(event, socket, data)
+					};
+				}(eventName)));
 			}
+
+			socket.on('error', function (error) {
+				console.log(error.stack);
+			});
+
+			socket.on(EVENT.OPTIONS, () => {
+				let events = {};
+
+				for (let eventName in this.EVENTS) {
+					events[this.revertEventName(eventName)] = eventName;
+				}
+
+				socket.emit(EVENT.OPTIONS, { events });
+			});
 
 			socket.on('disconnect', () => {
 				this.logoutSocket(socket);
@@ -77,12 +97,12 @@ class BaseClient extends EventEmitter {
 			Message: MessageModel(this, this._options.message)
 		};
 
-		if (this._options[OPTION.CHAT_MEMORY]) {
-			this._memoryChat = new Memory({
-				provider: this._options[OPTION.CHAT_MEMORY_PROVIDER],
-				ttl:      this._options[OPTION.CHAT_MEMORY_TTL]
-			});
-		}
+		//if (this._options[OPTION.CHAT_MEMORY]) {
+		//	this._memoryChat = new Memory({
+		//		provider: this._options[OPTION.CHAT_MEMORY_PROVIDER],
+		//		ttl:      this._options[OPTION.CHAT_MEMORY_TTL]
+		//	});
+		//}
 
 		this.emit('initialize');
 	}
@@ -109,37 +129,40 @@ class BaseClient extends EventEmitter {
 		return this;
 	}
 
-	use(path, middleware) {
+	pre(path) {
+		this.use.apply(this, [path].concat(Array.prototype.slice.call(arguments, 1)));
+	}
+
+	post(path) {
 		if (!this.__middleware[path]) {
-			this.__middleware[path] = [];
+			this.__middleware[path] = { pre: [], post: [] };
 		}
 
-		if (_.isArray(middleware))
-			middleware.forEach((_middleware) => {
-				this.__middleware[path].push(_middleware);
-			});
-
-		if (middleware.exec)
-			if (_.isArray(middleware.exec))
-				middleware.exec.forEach((_middleware) => {
-					this.__middleware[path].push(_middleware);
-				});
-			else
-				this.__middleware[path].push(middleware.exec);
+		chain.add.apply(chain, [this.__middleware[path].post].concat(Array.prototype.slice.call(arguments, 1)));
 
 		return this;
 	}
 
-	unuse(path, callback) {
+	use(path) {
+		if (!this.__middleware[path]) {
+			this.__middleware[path] = { pre: [], post: [] };
+		}
+
+		chain.add.apply(chain, [this.__middleware[path].pre].concat(Array.prototype.slice.call(arguments, 1)));
+
+		return this;
+	}
+
+	unUse(path, obj) {
 		if (!(path in this.__middleware)) {
-			debug('unuse: path not found');
+			debug('unUse: path not found');
 			return this;
 		}
 
-		let index = this.__middleware.indexOf(callback);
+		let index = this.__middleware.pre.indexOf(obj);
 
 		if (index !== -1) {
-			this.__middleware.splice(index, 1);
+			this.__middleware.pre.splice(index, 1);
 		} else {
 			debug('unuse: not found callback, already removed?')
 		}
@@ -147,10 +170,39 @@ class BaseClient extends EventEmitter {
 		return this;
 	}
 
-	execMiddleware(path, data) {
-		var middleware = this.__middleware[path] || [];
+	unPost(path, obj) {
+		if (!(path in this.__middleware)) {
+			debug('unPost: path not found');
+			return this;
+		}
 
-		return chain.exec(middleware, data);
+		let index = this.__middleware.post.indexOf(obj);
+
+		if (index !== -1) {
+			this.__middleware.post.splice(index, 1);
+		} else {
+			debug('unuse: not found obj, already removed?')
+		}
+
+		return this;
+	}
+
+	preMiddleware(path, data) {
+		var middleware = this.__middleware[path] ? this.__middleware[path].pre : [];
+
+		return chain.exec(middleware, this, data)
+			.catch(function (error) {
+				debug(error);
+			});
+	}
+
+	postMiddleware(path, data) {
+		var middleware = this.__middleware[path] ? this.__middleware[path].post : [];
+
+		return chain.exec(middleware, this, data)
+			.catch(function (error) {
+				debug(error);
+			});
 	}
 
 	invoke(name, socket, data) {
@@ -160,24 +212,27 @@ class BaseClient extends EventEmitter {
 				return reject();
 			}
 
-
+			chain.exec(this.EVENTS[name], this, socket, data)
+				.then(function () {
+					console.log('then invoke')
+				})
+				.catch(function (error) {
+					debug(error);
+					reject(error);
+				});
 		};
 
 		return new Promise(promise);
 	}
 
 	addEvent(name) {
-		var callbacks = Array.prototype.slice.call(arguments, 1);
+		var eventName = this.eventName(name);
 
-		if (!this.EVENTS[name]) {
-			this.EVENTS[name] = [];
+		if (!this.EVENTS[eventName]) {
+			this.EVENTS[eventName] = [];
 		}
 
-		callbacks.forEach(function (callback) {
-			if (callback instanceof Function) {
-				this.EVENTS[name].push(callback)
-			}
-		});
+		chain.add.apply(chain, [this.EVENTS[eventName]].concat(Array.prototype.slice.call(arguments, 1)));
 
 		return this;
 	}
@@ -212,8 +267,20 @@ class BaseClient extends EventEmitter {
 		return name;
 	}
 
-	socketAuthorized(socket) {
-		return socket && (socket.auth === true) && socket[SOCKET_USER];
+	revertEventName(name) {
+		if (this._options[OPTION.EVENT_PREFIX]) {
+			let prefix = this._options[OPTION.EVENT_PREFIX];
+
+			return name.replace(prefix, '').replace(/^(\w)/, function (firstChar) {
+				return firstChar.toLowerCase();
+			});
+		}
+
+		return name;
+	}
+
+	socketAuthorized(socket, options, next) {
+		return socket && (socket.auth === true) && socket[SOCKET_USER] && next();
 	}
 
 	logoutSocket(socket) {
@@ -232,6 +299,8 @@ class BaseClient extends EventEmitter {
 			}
 		});
 	}
+
+
 }
 
 export default BaseClient;

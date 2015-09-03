@@ -27,3 +27,5 @@ export const MESSAGE_RECORD_EDIT    = 'messageRecordEdit';
 export const MEMBER_ONLINE   = 'memberOnline';
 export const MEMBER_STATUS   = 'memberStatus';
 export const MEMBER_CONTACTS = 'memberContacts';
+
+export const LABEL_PRIORITY = 'priority';

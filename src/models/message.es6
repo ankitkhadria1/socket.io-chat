@@ -8,25 +8,21 @@ export default function (client, options = {}) {
 	if (!options.collectionName) options.collectionName = 'chat_messages';
 
 	class Message extends Model {
-		constructor() {
-			super();
+		constructor(...args) {
+			super(...args);
 			super.initialize(options);
 		}
 
-		static collection() {
-			return options.collectionName;
-		}
+		static collection() { return options.collectionName; }
+		static db() { return db; }
+		static schema() { return schema; }
 
-		static db() {
-			return db;
-		}
-
-		static schema() {
-			return schema;
-		}
+		collection() { return options.collectionName; }
+		db() { return db; }
+		schema() { return schema; }
 	}
 
-	Message.ensureIndex();
+	//Model.ensureIndex(Message);
 
 	return Message;
 };

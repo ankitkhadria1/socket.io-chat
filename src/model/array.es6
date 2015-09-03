@@ -1,14 +1,19 @@
 export default class MArray extends Array {
 	constructor(...args) {
 		super(...args);
-	}
 
-	set model(model) {
-		this._model = model;
-	}
-
-	set path(path) {
-		this._path = path;
+		Object.defineProperties(this, {
+			_model: {
+				value: {},
+				writable: true,
+				enumerable: false
+			},
+			_path: {
+				value: '',
+				writable: true,
+				enumerable: false
+			}
+		})
 	}
 
 	push(value) {
@@ -30,5 +35,9 @@ export default class MArray extends Array {
 			this.splice(index, 1);
 			this._model.addAtomic('addToSet', this._path, value);
 		}
+	}
+
+	valueOf() {
+		return Array.prototype.slice.call(this);
 	}
 }

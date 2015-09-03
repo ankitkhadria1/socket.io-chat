@@ -231,7 +231,6 @@ class Model extends EventEmitter {
 		} else {
 			this.__atomics['$' + type][field] = value;
 		}
-
 	}
 
 	destroy() {

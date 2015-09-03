@@ -1,1 +1,1 @@
-{"version":3,"sources":["../../src/db/index.es6"],"names":[],"mappings":";;;;;;;;;;kBAAc,MAAM","file":"index.js","sourcesContent":["export * from './db';"]}
+{"version":3,"sources":["../../src/db/index.es6"],"names":[],"mappings":";;;;;;;;kBAAe,MAAM","file":"index.js","sourcesContent":["import Db from './db';\nexport default Db;"]}

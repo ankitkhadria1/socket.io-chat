@@ -10,11 +10,15 @@ export default class Db {
 
 		switch (options.provider) {
 			case 'mongodb':
-				this.provider = new ProviderMongodb(this);
+				this._provider = new ProviderMongodb(options.connect);
 				break;
 			default:
-				this.provider = new ProviderMongodb(this);
+				this._provider = new ProviderMongodb(options.connect);
 		}
+	}
+
+	get provider () {
+		return this._provider;
 	}
 
 	get connect() {
@@ -25,17 +29,5 @@ export default class Db {
 		_connect && (this._connect = _connect);
 
 		return this;
-	}
-
-	find() {
-		this.provider.find.apply(this.provider, arguments);
-	}
-
-	update() {
-		this.provider.update.apply(this.provider, arguments);
-	}
-
-	remove() {
-		this.provider.remove.apply(this.provider, arguments);
 	}
 }

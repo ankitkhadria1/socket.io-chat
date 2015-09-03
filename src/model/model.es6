@@ -1,41 +1,44 @@
-import _ 			 from 'underscore';
-import { debug }     from '../debug';
-import clone         from 'clone';
-import deepExtend    from 'deep-extend';
-import QueryResolver from '../queryResolver';
-import SchemaLoader  from '../schema';
+import _                from 'underscore';
+import { debug }        from '../debug';
+import clone            from 'clone';
+import deepExtend       from 'deep-extend';
+import QueryResolver    from '../queryResolver';
+import SchemaLoader     from '../schema';
+import { Validator }    from 'jsonschema';
+import { EventEmitter } from 'events';
+import MArray           from './array';
 
-import MArray from './array';
+const ERROR_VALIDATION_TYPE = 'validation';
 
 var typeOf = function (object) {
 	return Object.prototype.toString.call(object).replace(/\[object\s(\w+)\]/, '$1');
 };
 
-export default class Model {
-	constructor() {
-		this.isNew = true;
-		this._atomics = {};
+export default class Model extends EventEmitter {
+	constructor(data = {}) {
+		super();
+
+		Object.defineProperties(this, {
+			isNew:      { value: true, writable: true, enumerable: false },
+			_atomics:   { value: {}, writable: true, enumerable: false },
+			_defaults:  { value: {}, writable: true, enumerable: false },
+			_readOnly:  { value: [], writable: true, enumerable: false },
+			_propPaths: { value: [], writable: true, enumerable: false },
+			_data:      { value: data, writable: true, enumerable: false },
+			errors:     { value: [], writable: true, enumerable: false },
+			error:      { value: null, writable: true, enumerable: false }
+		});
 	}
 
 	initialize(options = {}) {
-		this.defaults = this.schema();
-		this.readOnly = this.schema();
+		this.defaults  = this.constructor.schema();
+		this.readOnly  = this.constructor.schema();
+		this.propPaths = this.constructor.schema();
 
 		this.set(this.defaults);
+		this.set(this._data);
 
-		console.log(this.defaults);
-	}
-
-	static ensureIndex() {
-		SchemaLoader
-			.index(this.schema())
-			.forEach(function (value, index) {
-				this.db().connect.collection(this.collection()).ensureIndex(index, value, function (err, result) {
-					if (err) {
-						debug('ensure index: ' + err.message);
-					}
-				});
-			});
+		this._data = {};
 	}
 
 	set defaults(schema) {
@@ -54,20 +57,25 @@ export default class Model {
 		return this._readOnly;
 	}
 
-	set(key, value, path = []) {
-		if (arguments.length === 1) {
-			_.each(key, (value, key) => {
-				this.set(key, value, path.push(key));
-			});
-		} else {
-			path = [key];
+	set propPaths(schema) {
+		this._propPaths = SchemaLoader.propPaths(schema);
+	}
+
+	get propPaths() {
+		return this._propPaths;
+	}
+
+	set(values, value = undefined, path = []) {
+		if (arguments.length !== 1) {
+			values = { [values]: value }
 		}
 
-		if (this.defaults.hasOwnProperty(key) && !~this.readOnly.indexOf(path.join('.'))) {
-			this[key] = value;
+		if (typeOf(values) === 'Object') {
 
-			if (~['Number', 'String', 'Data', 'Boolean', 'Object', 'Null'].indexOf(typeOf(value))) {
-				this.addAtomic('set', key, value);
+			for (let prop in values) {
+				if (values.hasOwnProperty(prop)) {
+					this[prop] = this.castData(values[prop]);
+				}
 			}
 		}
 
@@ -75,7 +83,7 @@ export default class Model {
 	}
 
 	get(key) {
-		if (~this.defaults.indexOf(key)) {
+		if (~this.defaults.hasOwnProperty(key)) {
 			return this[key];
 		}
 	}
@@ -87,6 +95,12 @@ export default class Model {
 			});
 		}
 
+		this.createProperty(key, value);
+
+		return this;
+	}
+
+	createProperty(key, value) {
 		if (this.defaults.hasOwnProperty(key)) {
 			switch (typeOf(value)) {
 				case 'Array':
@@ -103,20 +117,45 @@ export default class Model {
 				this.addAtomic('set', key, value);
 			}
 		}
-
-		return this;
 	}
 
 	toJSON() {
-		let output = {};
+		let output   = {};
+		let defaults = this.defaults;
 
-		for (let prop in this) {
-			if (this.hasOwnProperty(prop)) {
-				output[prop] = this[prop];
+		let walker = function (obj, output) {
+			for (let prop in obj) {
+				if (obj.hasOwnProperty(prop) && defaults.hasOwnProperty) {
+					if (obj[prop] instanceof MArray) {
+						output[prop] = [];
+						walker(obj[prop], output[prop]);
+						//obj[prop].forEach(function (value) {
+						//	walker(value, output[prop]);
+						//});
+					} else {
+						switch (typeOf(obj[prop])) {
+							case 'Object':
+								output[prop] = {};
+								walker(obj[prop], output[prop]);
+								break;
+							case 'Array':
+								output[prop] = [];
+								obj[prop].forEach(function (value) {
+									walker(value, output[prop]);
+								});
+								break;
+							default:
+								output[prop] = obj[prop];
+						}
+					}
+
+				}
 			}
-		}
+		};
 
-		return clone(output, true);
+		walker(this, output);
+
+		return output;
 	}
 
 	addAtomic(type, key, value) {
@@ -150,15 +189,115 @@ export default class Model {
 		return this;
 	}
 
-	static find() {
-		let queryResolver = new QueryResolver(Model);
+	save() {
+		let promise = (resolve, reject) => {
+			this.isValid() ? resolve() : reject(this.error);
+		};
 
-		return queryResolver.find.apply(queryResolver, arguments);
+		return new Promise(promise)
+			.then(() => {
+				let cursor = this.db().provider.collection(this);
+
+				if (this.isNew) {
+					return cursor.insert(this.toJSON()).exec()
+						.then(() => {
+							this.isNew = false;
+						});
+				} else {
+					return cursor.update(this.toJSON()).exec()
+				}
+			});
 	}
 
-	static findOne() {
-		let queryResolver = new QueryResolver(Model);
+	isValid() {
+		var result = false, error;
 
-		return queryResolver.findOne.apply(queryResolver, arguments);
+		result = this.validate();
+
+		if (result.length > 0) {
+			result.forEach(function (error) {
+				error.type = ERROR_VALIDATION_TYPE;
+			});
+
+			this.errors = result;
+			this.error  = this.errors[0];
+
+			return false;
+		}
+
+		return true;
+	}
+
+	validate() {
+		var validator = new Validator(),
+			result    = validator.validate(this.toJSON(), this.schema());
+
+		this.emit('beforeValidate');
+
+		if (result.errors.length) {
+			return result.errors;
+		}
+
+		this.emit('validate');
+
+		return [];
+	}
+
+	castData(data, path = []) {
+		switch (typeOf(data)) {
+			case 'Object':
+				for (let prop in data) {
+					if (data.hasOwnProperty(prop)) {
+						this.castData(data[prop], path.concat([prop]));
+					}
+				}
+				break;
+			case 'Array':
+				let newArray    = new MArray();
+				newArray._model = this;
+				newArray._path  = path.join('.');
+				newArray.push(...data);
+				data            = newArray;
+				data.forEach((value) => {
+					this.castData(value, path);
+				});
+				break;
+		}
+
+		return data;
+	}
+
+;
+
+	static find(query, select) {
+		return this.db().provider.collection(this).find(query, select);
+	}
+
+	static findOne(query, select) {
+		return this.db().provider.collection(this).findOne(query, select);
+	}
+
+	static insert() {
+
+	}
+
+	static update() {
+
+	}
+
+	static remove() {
+
+	}
+
+	static ensureIndex(Model) {
+		SchemaLoader
+			.index(Model.schema())
+			.forEach(function (value, index) {
+				//Model.db().connect.collection(Model.collection()).ensureIndex(index, value, function (err, result) {
+				//	if (err) {
+				//		debug('ensure index: ' + err.message);
+				//	}
+				//});
+			});
 	}
 }

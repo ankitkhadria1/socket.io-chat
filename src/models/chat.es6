@@ -8,25 +8,36 @@ export default function (client, options = {}) {
 	if (!options.collectionName) options.collectionName = 'chat';
 
 	class Chat extends Model {
-		constructor() {
-			super();
+		constructor(...args) {
+			super(...args);
+
 			super.initialize(options);
 		}
 
-		static collection() {
-			return options.collectionName;
+		setCreator(creator) {
+			this.set('creatorId', creator);
+			this.addMember(creator);
+
+			return this;
 		}
 
-		static db() {
-			return db;
+		addMember(member) {
+			this.members.addToSet(member);
+
+			return this;
 		}
 
-		static schema() {
-			return schema;
-		}
+		// TODO: test with multiple clients. Static method can be invoked from the property `constructor` of the parent class;
+		static collection() { return options.collectionName; }
+		static db() { return db; }
+		static schema() { return schema; }
+
+		collection() { return options.collectionName; }
+		db() { return db; }
+		schema() { return schema; }
 	}
 
-	Chat.ensureIndex();
+	Model.ensureIndex(Chat);
 
 	return Chat;
 };

@@ -1,11 +1,30 @@
-import fs from 'fs';
-import _  from 'underscore';
+import fs        from 'fs';
+import path      from 'path';
+import _         from 'underscore';
+import { debug } from './debug';
+
+var slice = Array.prototype.slice;
+
+// TODO: cache model props (defaults/index/readOnly/propPaths)
 
 class SchemaLoader {
-	static load(schemaPath) {
-		var schema = fs.readFileSync(schemaPath);
+	static load(schemaName) {
+		let schemaPath = path.join(__dirname, '..', 'schema', schemaName + '.json');
+		let schemaJSON = fs.readFileSync(path.resolve(schemaPath));
 
-		return schema ? JSON.parse(schema) : null;
+		let mockSchema = { properties: {} };
+
+		if (schemaJSON) {
+			try {
+				return JSON.parse(schemaJSON);
+			} catch (e) {
+				debug('fail parse schema: ' + schemaName);
+
+			}
+		} else {
+			debug('fail load schema: ' + schemaName);
+		}
+		return mockSchema;
 	}
 
 	static defaults(schema) {
@@ -43,8 +62,8 @@ class SchemaLoader {
 	}
 
 	static index(schema) {
-		let list = [],
-			iterations = 0,
+		let list            = [],
+			iterations      = 0,
 			limitIterations = 200;
 
 		let walker = function (props, path = []) {
@@ -52,7 +71,7 @@ class SchemaLoader {
 				throw new Error('recursive walk schema for index')
 			}
 
-			_.each(props, function (props, key) {
+			_.each(props, function (prop, key) {
 				if (prop.index) {
 					// TODO: if nested properties?
 					path.push(key);
@@ -80,29 +99,72 @@ class SchemaLoader {
 		return list;
 	}
 
-	static readOnly(schema){
-		var readonlyAttrs = [];
-		var path          = [];
+	static readOnly(schema) {
+		let paths = [];
 
-		function walk(properties) {
-			_.each(properties, (prop, key) => {
-				path.push(key);
+		var walker = function (schema, path) {
+			if (!schema.type) {
+				return;
+			}
 
-				if (prop.readonly) {
-					readonlyAttrs.push(path.join('.'));
+			switch (schema.type.toLowerCase()) {
+				case 'object':
+					for (let prop in schema.properties) {
+						if (!schema.properties.hasOwnProperty(prop)) continue;
+
+						let locPath = Array.prototype.slice.call(path || []);
+						locPath.push(prop);
+						schema.readonly && paths.push(locPath.join('.'));
+						walker(schema.properties[prop], locPath);
+					}
+					break;
+				case 'array':
+					let locPath = Array.prototype.slice.call(path || []);
+					schema.readonly && paths.push(locPath.join('.'));
+					walker(schema.items, locPath);
+					break;
+				default: {
+					let locPath = Array.prototype.slice.call(path || []);
+					schema.readonly && paths.push(locPath.join('.'));
 				}
+			}
+		};
 
-				if (prop.properties) {
-					walk(prop.properties);
-				} else {
-					path = [];
-				}
-			});
-		}
+		walker(schema);
 
-		walk(schema.properties);
+		return paths;
+	}
 
-		return readonlyAttrs;
+	static propPaths(schema) {
+		let paths = [];
+
+		var walker = function (schema, path) {
+			if (!schema.type) {
+				return;
+			}
+
+			switch (schema.type.toLowerCase()) {
+				case 'object':
+					for (let prop in schema.properties) {
+						if (!schema.properties.hasOwnProperty(prop)) continue;
+
+						let locPath = slice.call(path || []);
+						locPath.push(prop);
+
+						paths.push(locPath.join('.'));
+
+						walker(schema.properties[prop], locPath);
+					}
+					break;
+				case 'array':
+					walker(schema.items, slice.call(path || []));
+					break;
+			}
+		};
+
+		walker(schema);
+
+		return paths;
 	}
 }
 
