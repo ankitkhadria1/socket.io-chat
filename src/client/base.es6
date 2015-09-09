@@ -1,18 +1,21 @@
-import IO               from 'socket.io';
-import EventEmitter     from 'events';
-import _                from 'underscore';
-import deepExtend       from 'deep-extend';
-import { debug }        from './debug';
-import ChatModel        from './models/chat';
-import MessageModel     from './models/message';
-import Members          from './members';
-import Rooms            from './rooms';
-import Memory           from './memory';
-import Db               from './db/index';
-import * as chain        from './chain';
-import * as middleWares from './middlewares';
-import * as OPTION      from './options';
-import * as EVENT       from './events';
+import IO                 from 'socket.io';
+import EventEmitter       from 'events';
+import _                  from 'underscore';
+import deepExtend         from 'deep-extend';
+import { debug }          from '../debug';
+import ChatModel          from '../models/chat';
+import MessageModel       from '../models/message';
+import Members            from '../members';
+import Rooms              from '../rooms';
+import Memory             from '../memory';
+import Db                 from '../db/index';
+import Component          from '../component/index';
+import RespondComponent   from '../component/respond';
+import JoinQueueComponent from '../component/joinQueue';
+import * as chain         from '../chain';
+import * as middleWares   from '../middlewares';
+import * as OPTION        from '../options';
+import * as EVENT         from '../events';
 
 require('source-map-support').install();
 
@@ -43,28 +46,65 @@ class BaseClient extends EventEmitter {
 			throw new Error('options.db required `provider` (mongodb)');
 		}
 
-		this.__middleware = [];
-		this._options     = _.clone(options);
-		this._io          = IO(server, deepExtend({ maxHttpBufferSize: 1000 }, this._options[OPTION.IO] || {}));
-		this.EVENTS       = Object.create(null);
-		this.rooms        = new Rooms();
-		this.members      = new Members();
+		Object.defineProperties(this, {
+			middleware: {
+				enumerable: false,
+				writable:   true,
+				value:      []
+			},
+			options:    {
+				enumerable: false,
+				writable:   true,
+				value:      _.clone(options)
+			},
+			io:         {
+				enumerable: false,
+				writable:   true,
+				value:      IO(server, deepExtend({ maxHttpBufferSize: 1000 }, options[OPTION.IO] || {}))
+			},
+			EVENTS:     {
+				enumerable: false,
+				writable:   true,
+				value:      Object.create(null)
+			},
+			components: {
+				enumerable: false,
+				value:      {
+					Respond:   null,
+					joinQueue: null,
+					Model:     null
+				}
+			},
+			//rooms:        {
+			//	enumerable: false,
+			//	writable:   true,
+			//	value:      new Rooms()
+			//},
+			members:    {
+				enumerable: false,
+				writable:   true,
+				value:      new Members()
+			}
+		});
 	}
 
 	initialize() {
 		this.emit('pre-initialize');
 
-		this._db = new Db(this._options.db);
-		this._io.on(IO_CONNECTION, (socket) => {
-			let _client = this;
+		this.db = new Db(this.options.db);
 
-			let wrapEventCallback = function (event, socket, data) {
-				_client.invoke(event, socket, data);
-			};
+		this.initializeComponents();
 
-			for (let name in this.EVENTS) {
-				let eventName = name;
+		//this.io.on(IO_CONNECTION, (socket) => {});
 
+		let _client           = this;
+		let wrapEventCallback = function (event, socket, data) {
+			_client.invoke(event, socket, data);
+		};
+
+		this.namespace = this.io.of('/' + this.options[OPTION.NAMESPACE]);
+		this.namespace.on(EVENT.IO_CONNECTION, (socket) => {
+			for (let eventName in this.EVENTS) {
 				socket.on(eventName, (function (event) {
 					return function (data = {}) {
 						wrapEventCallback(event, socket, data)
@@ -72,7 +112,7 @@ class BaseClient extends EventEmitter {
 				}(eventName)));
 			}
 
-			socket.on('error', function (error) {
+			socket.on(EVENT.ERROR, function (error) {
 				console.log(error.stack);
 			});
 
@@ -87,28 +127,30 @@ class BaseClient extends EventEmitter {
 			});
 
 			socket.on('disconnect', () => {
+				this.members.remove(socket.user, socket);
 				this.logoutSocket(socket);
-				this.members.remove(socket[SOCKET_USER], socket);
 			});
 		});
 
 		this.__models = {
-			Chat:    ChatModel(this, this._options.chat),
-			Message: MessageModel(this, this._options.message)
+			Chat:    ChatModel(this, this.options.chat),
+			Message: MessageModel(this, this.options.message)
 		};
 
-		//if (this._options[OPTION.CHAT_MEMORY]) {
+
+		//if (this.options[OPTION.CHAT_MEMORY]) {
 		//	this._memoryChat = new Memory({
-		//		provider: this._options[OPTION.CHAT_MEMORY_PROVIDER],
-		//		ttl:      this._options[OPTION.CHAT_MEMORY_TTL]
+		//		provider: this.options[OPTION.CHAT_MEMORY_PROVIDER],
+		//		ttl:      this.options[OPTION.CHAT_MEMORY_TTL]
 		//	});
 		//}
 
 		this.emit('initialize');
 	}
 
-	get io() {
-		return this._io;
+	initializeComponents() {
+		if (!this.components.Respond) this.register('Respond', RespondComponent);
+		if (!this.components.joinQueue) this.register('joinQueue', new JoinQueueComponent(this));
 	}
 
 	get model() {
@@ -134,35 +176,35 @@ class BaseClient extends EventEmitter {
 	}
 
 	post(path) {
-		if (!this.__middleware[path]) {
-			this.__middleware[path] = { pre: [], post: [] };
+		if (!this.middleware[path]) {
+			this.middleware[path] = { pre: [], post: [] };
 		}
 
-		chain.add.apply(chain, [this.__middleware[path].post].concat(Array.prototype.slice.call(arguments, 1)));
+		chain.add.apply(chain, [this.middleware[path].post].concat(Array.prototype.slice.call(arguments, 1)));
 
 		return this;
 	}
 
 	use(path) {
-		if (!this.__middleware[path]) {
-			this.__middleware[path] = { pre: [], post: [] };
+		if (!this.middleware[path]) {
+			this.middleware[path] = { pre: [], post: [] };
 		}
 
-		chain.add.apply(chain, [this.__middleware[path].pre].concat(Array.prototype.slice.call(arguments, 1)));
+		chain.add.apply(chain, [this.middleware[path].pre].concat(Array.prototype.slice.call(arguments, 1)));
 
 		return this;
 	}
 
 	unUse(path, obj) {
-		if (!(path in this.__middleware)) {
+		if (!(path in this.middleware)) {
 			debug('unUse: path not found');
 			return this;
 		}
 
-		let index = this.__middleware.pre.indexOf(obj);
+		let index = this.middleware.pre.indexOf(obj);
 
 		if (index !== -1) {
-			this.__middleware.pre.splice(index, 1);
+			this.middleware.pre.splice(index, 1);
 		} else {
 			debug('unuse: not found callback, already removed?')
 		}
@@ -171,15 +213,15 @@ class BaseClient extends EventEmitter {
 	}
 
 	unPost(path, obj) {
-		if (!(path in this.__middleware)) {
+		if (!(path in this.middleware)) {
 			debug('unPost: path not found');
 			return this;
 		}
 
-		let index = this.__middleware.post.indexOf(obj);
+		let index = this.middleware.post.indexOf(obj);
 
 		if (index !== -1) {
-			this.__middleware.post.splice(index, 1);
+			this.middleware.post.splice(index, 1);
 		} else {
 			debug('unuse: not found obj, already removed?')
 		}
@@ -188,7 +230,7 @@ class BaseClient extends EventEmitter {
 	}
 
 	preMiddleware(path, data) {
-		var middleware = this.__middleware[path] ? this.__middleware[path].pre : [];
+		var middleware = this.middleware[path] ? this.middleware[path].pre : [];
 
 		return chain.exec(middleware, this, data)
 			.catch(function (error) {
@@ -197,7 +239,7 @@ class BaseClient extends EventEmitter {
 	}
 
 	postMiddleware(path, data) {
-		var middleware = this.__middleware[path] ? this.__middleware[path].post : [];
+		var middleware = this.middleware[path] ? this.middleware[path].post : [];
 
 		return chain.exec(middleware, this, data)
 			.catch(function (error) {
@@ -213,9 +255,6 @@ class BaseClient extends EventEmitter {
 			}
 
 			chain.exec(this.EVENTS[name], this, socket, data)
-				.then(function () {
-					console.log('then invoke')
-				})
 				.catch(function (error) {
 					debug(error);
 					reject(error);
@@ -256,8 +295,8 @@ class BaseClient extends EventEmitter {
 	}
 
 	eventName(name) {
-		if (this._options[OPTION.EVENT_PREFIX]) {
-			let prefix = this._options[OPTION.EVENT_PREFIX];
+		if (this.options[OPTION.NAMESPACE]) {
+			let prefix = this.options[OPTION.NAMESPACE];
 
 			return name.replace(/^(\w)/, function (firstChar) {
 				return prefix + firstChar.toUpperCase();
@@ -268,8 +307,8 @@ class BaseClient extends EventEmitter {
 	}
 
 	revertEventName(name) {
-		if (this._options[OPTION.EVENT_PREFIX]) {
-			let prefix = this._options[OPTION.EVENT_PREFIX];
+		if (this.options[OPTION.NAMESPACE]) {
+			let prefix = this.options[OPTION.NAMESPACE];
 
 			return name.replace(prefix, '').replace(/^(\w)/, function (firstChar) {
 				return firstChar.toLowerCase();
@@ -290,7 +329,7 @@ class BaseClient extends EventEmitter {
 
 	getChat(id) {
 		return new Promise((resolve, rejcet) => {
-			if (OPTION.CHAT_MEMORY in this._options) {
+			if (OPTION.CHAT_MEMORY in this.options) {
 
 			} else {
 				this.model.Chat.findById(id).then((chat) => {
@@ -300,7 +339,17 @@ class BaseClient extends EventEmitter {
 		});
 	}
 
+	respond(namespace) {
+		return new this.components.Respond(this, namespace);
+	}
 
+	register(componentName, NewComponent) {
+		this.components[componentName] = NewComponent;
+	}
+
+	registerModel(modelName, Model) {
+		this.__models[modelName] = Model;
+	}
 }
 
 export default BaseClient;

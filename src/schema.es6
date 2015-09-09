@@ -46,7 +46,7 @@ class SchemaLoader {
 					} else if (_.isString(prop.default)) {
 						output[key] = ~['null', 'undefined'].indexOf(prop.default)
 							? null
-							: global[prop.default]();
+							: new global[prop.default]();
 					}
 				}
 
@@ -114,7 +114,7 @@ class SchemaLoader {
 
 						let locPath = Array.prototype.slice.call(path || []);
 						locPath.push(prop);
-						schema.readonly && paths.push(locPath.join('.'));
+						schema.properties[prop].readonly && paths.push(locPath.join('.'));
 						walker(schema.properties[prop], locPath);
 					}
 					break;

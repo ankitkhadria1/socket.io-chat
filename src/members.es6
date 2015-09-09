@@ -1,71 +1,67 @@
-(function () {
-	'use strict';
+class Member extends Array {
+	constructor(length = 0) {
+		super(length);
+	}
+}
 
-	class Member extends Array {
-		constructor(...args) {
-			super(...args);
-		}
+class Members {
+	constructor() {
+		this.__members = new Map();
 	}
 
-	class Members {
-		constructor() {
-			this.__members = new Map();
+	add(id, socket) {
+		if (!this.__members.has(String(id))) {
+			this.__members.set(String(id), new Member());
 		}
 
-		add(id, socket) {
-			if (!this.__members.has(String(id))) {
-				this.__members.set(String(id), new Member());
-			}
+		this.__members.get(String(id)).push(socket);
 
-			this.__members.get(String(id)).push(socket);
+		return this;
+	}
 
-			return this;
-		}
+	remove(id, socket) {
+		var member, socketIndex;
 
-		remove(id, socket) {
-			var member, socketIndex;
+		if (socket) {
+			member      = this.__members.get(String(id));
 
-			if (socket) {
-				member      = this.__members.get(String(id));
+			if (member) {
+				socketIndex = member.indexOf(socket);
+				member.splice(socketIndex, 1);
 
-				if (member) {
-					socketIndex = member.indexOf(socket);
-					member.splice(socketIndex, 1);
-
-					if (member.length === 0) {
-						this.__members.delete(String(id));
-					}
+				if (member.length === 0) {
+					this.__members.delete(String(id));
 				}
-			} else {
-				this.__members.delete(String(id));
 			}
-
-			return this;
+		} else {
+			this.__members.delete(String(id));
 		}
 
-		get(id) {
-			var res, member;
+		return this;
+	}
 
-			if (id instanceof Array) {
-				res = [];
+	get(id) {
+		var res, member;
 
-				id.forEach((id) => {
-					member = this.__members.get(String(id));
-					member && member.forEach(function (socket) {
-						socket && res.push(socket);
-					});
+		if (id instanceof Array) {
+			res = [];
+
+			id.forEach((id) => {
+				member = this.__members.get(String(id));
+				member && member.forEach(function (socket) {
+					socket && res.push(socket);
 				});
+			});
 
-				return res;
-			} else {
-				return this.__members.get(String(id));
-			}
-		}
-
-		isOnline(id) {
-			return this.__members.has(String(id)) && this.__members.get(String(id)).length > 0;
+			return res;
+		} else {
+			return this.__members.get(String(id));
 		}
 	}
 
-	module.exports = Members;
-}());
+	isOnline(id) {
+		return this.__members.has(String(id)) && this.__members.get(String(id)).length > 0;
+	}
+}
+
+export default Members;

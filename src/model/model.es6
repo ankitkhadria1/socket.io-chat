@@ -1,3 +1,4 @@
+import { typeOf, slice } from '../utils';
 import _                from 'underscore';
 import { debug }        from '../debug';
 import clone            from 'clone';
@@ -10,9 +11,7 @@ import MArray           from './array';
 
 const ERROR_VALIDATION_TYPE = 'validation';
 
-var typeOf = function (object) {
-	return Object.prototype.toString.call(object).replace(/\[object\s(\w+)\]/, '$1');
-};
+// TODO: check type Date on save
 
 export default class Model extends EventEmitter {
 	constructor(data = {}) {
@@ -36,7 +35,7 @@ export default class Model extends EventEmitter {
 		this.propPaths = this.constructor.schema();
 
 		this.set(this.defaults);
-		this.set(this._data);
+		this.set(this._data, false);
 
 		this._data = {};
 	}
@@ -65,26 +64,109 @@ export default class Model extends EventEmitter {
 		return this._propPaths;
 	}
 
-	set(values, value = undefined, path = []) {
-		if (arguments.length !== 1) {
-			values = { [values]: value }
-		}
+	set(values, value = undefined) {
+		let force = true;
+		let self  = this;
 
-		if (typeOf(values) === 'Object') {
+		/*
+		 {
+		 name: 123,
+		 systemNotification: {
+		 addMember: true
+		 }
+		 }
+
+		 */
+
+		function set(object, values, path = []) {
+			let valuesType = typeOf(values);
 
 			for (let prop in values) {
 				if (values.hasOwnProperty(prop)) {
-					this[prop] = this.castData(values[prop]);
+					let valueType = typeOf(values[prop]);
+					let locPath   = slice(path);
+
+					valuesType !== 'Array' && locPath.push(prop);
+
+					if (~self.propPaths.indexOf(locPath.join('.')) && (!~self.readOnly.indexOf(locPath.join('.')) || force)) {
+						if (/_id$|Id$/.test(locPath.join('.'))) {
+							object[prop] = values[prop];
+							continue;
+						}
+
+						if (locPath.join('.') === 'createdAt') {
+							//debug(typeOf(values[prop]));
+						}
+
+						switch (valueType) {
+							case 'Object':
+								if (values[prop].constructor === Object) {
+									object[prop] = {};
+									for (let key in values[prop]) {
+										set(object[prop], values[prop], locPath);
+									}
+								} else {
+									// ObjectID
+									object[prop] = values[prop];
+								}
+
+								break;
+							case 'Array':
+								object[prop]        = new MArray();
+								object[prop]._model = self;
+								object[prop]._path  = locPath;
+
+								set(object[prop], values[prop], locPath);
+								//for (let item of values[prop]) {
+								//}
+
+								break;
+							default:
+								object[prop] = values[prop];
+						}
+					} else {
+						//debug('fail path', locPath.join('.'))
+					}
+
 				}
 			}
 		}
+
+		if (typeOf(values) !== 'Object') {
+			values = { [values]: value };
+
+		}
+
+		if (arguments.length > 1 && typeOf(Array.prototype.slice.call(arguments, -1)[0]) === 'Boolean') {
+			force = Array.prototype.slice.call(arguments, -1)[0];
+
+			if (typeof force === 'undefined') {
+				force = true;
+			}
+		}
+
+
+		set(this, values);
 
 		return this;
 	}
 
 	get(key) {
-		if (~this.defaults.hasOwnProperty(key)) {
+		if (arguments.length > 0 && ~this.defaults.hasOwnProperty(key)) {
 			return this[key];
+		}
+
+		if (arguments.length === 0) {
+			let output = clone(this);
+
+			for (let prop in output) {
+				if (!output.hasOwnProperty(prop)) continue;
+				if (!this.defaults.hasOwnProperty(prop)) {
+					delete output[prop];
+				}
+			}
+
+			return output;
 		}
 	}
 
@@ -120,38 +202,40 @@ export default class Model extends EventEmitter {
 	}
 
 	toJSON() {
-		let output   = {};
-		let defaults = this.defaults;
+		let output = {};
+		let self   = this;
 
-		let walker = function (obj, output) {
+		function walker(obj, innerObj, path = []) {
+			let valuesType = typeOf(obj);
+
 			for (let prop in obj) {
-				if (obj.hasOwnProperty(prop) && defaults.hasOwnProperty) {
-					if (obj[prop] instanceof MArray) {
-						output[prop] = [];
-						walker(obj[prop], output[prop]);
-						//obj[prop].forEach(function (value) {
-						//	walker(value, output[prop]);
-						//});
-					} else {
-						switch (typeOf(obj[prop])) {
-							case 'Object':
-								output[prop] = {};
-								walker(obj[prop], output[prop]);
-								break;
-							case 'Array':
-								output[prop] = [];
-								obj[prop].forEach(function (value) {
-									walker(value, output[prop]);
-								});
-								break;
-							default:
-								output[prop] = obj[prop];
-						}
-					}
+				if (!obj.hasOwnProperty(prop)) continue;
 
+				let locPath   = slice(path);
+				valuesType !== 'Array' && locPath.push(prop);
+
+				if (!~self.propPaths.indexOf(locPath.join('.'))) continue;
+
+				// TODO: dirty fix
+				if (/_id$|Id$/.test(prop) && obj[prop]) {
+					innerObj[prop] = obj[prop].toString();
+					continue;
+				}
+
+				switch (typeOf(obj[prop])) {
+					case 'Object':
+						innerObj[prop] = {};
+						walker(obj[prop], innerObj[prop], locPath);
+						break;
+					case 'Array':
+						innerObj[prop] = [];
+						walker(obj[prop], innerObj[prop], locPath);
+						break;
+					default:
+						innerObj[prop] = obj[prop];
 				}
 			}
-		};
+		}
 
 		walker(this, output);
 
@@ -200,11 +284,20 @@ export default class Model extends EventEmitter {
 
 				if (this.isNew) {
 					return cursor.insert(this.toJSON()).exec()
-						.then(() => {
+						.then((result) => {
+							this.set(result);
 							this.isNew = false;
+
+							return this;
 						});
 				} else {
 					return cursor.update(this.toJSON()).exec()
+						.then((result) => {
+							this.set(result);
+							this.isNew = false;
+
+							return this;
+						});
 				}
 			});
 	}
@@ -230,7 +323,7 @@ export default class Model extends EventEmitter {
 
 	validate() {
 		var validator = new Validator(),
-			result    = validator.validate(this.toJSON(), this.schema());
+			result    = validator.validate(this.get(), this.schema());
 
 		this.emit('beforeValidate');
 

@@ -1,0 +1,1 @@
+{"version":3,"sources":["../../src/component/index.es6"],"names":[],"mappings":";;;;;;;;yBAAqC,aAAa","file":"index.js","sourcesContent":["import Component                from './component';\n\nexport default Component;"]}

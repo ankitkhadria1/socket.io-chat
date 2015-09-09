@@ -38,8 +38,18 @@
 		"members": {
 			"type": "array",
 			"items": {
-				"type": "string",
-				"pattern": "^[a-z0-9]{12,24}$"
+				"type": "object",
+				"properties": {
+					"_id": {
+						"type": "string",
+						"pattern": "^[a-z0-9]{12,24}$"
+					},
+					"unreadCount": {
+						"type": "number",
+						"default": "Number",
+						"min": 0
+					}
+				}
 			},
 			"default": "Array",
 			"readonly": 1

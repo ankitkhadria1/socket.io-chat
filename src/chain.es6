@@ -50,7 +50,7 @@ export let exec = function (chain = [], context = {}) {
 			}
 
 			if (index === chain.length) {
-				return resolve(data);
+				return resolve.apply({}, data);
 			}
 		}
 

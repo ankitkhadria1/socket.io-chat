@@ -2,16 +2,20 @@ import ObjectID         from 'bson-objectid';
 import { debug }        from '../debug';
 import QueryResolver    from './queryResolver';
 import Provider         from './provider';
+import clone            from 'clone';
 
 export default class ProviderMongodb extends Provider {
 	constructor(db) {
 		super();
 
 		Object.defineProperties(this, {
-			_db: {
+			_db:  {
 				writable:   true,
 				enumerable: false,
 				value:      db
+			},
+			name: {
+				value: 'mongodb'
 			}
 		});
 	}
@@ -27,8 +31,7 @@ export default class ProviderMongodb extends Provider {
 
 		return new Promise((resolve, reject) => {
 			cursor.insert(dbCursor.__data, function (err, result) {
-				err ? reject(err) : resolve(result);
-
+				err ? reject(err) : resolve(dbCursor.__data);
 			});
 		});
 	}
@@ -43,28 +46,41 @@ export default class ProviderMongodb extends Provider {
 		});
 	}
 
-	find(dbCursor, options) {
+	findOneAndUpdate(dbCursor, options = {}) {
+		let cursor = this._db.collection(dbCursor.queryResolver.Model.collection());
+
+		dbCursor.__options.new = true;
+
+		return new Promise((resolve, reject) => {
+			cursor.findOneAndUpdate(dbCursor.__query, dbCursor.__updateQuery, dbCursor.__options, function (err, result) {
+				err ? reject(err) : resolve(result);
+			});
+		});
+	}
+
+	find(dbCursor, options = {}) {
 		let castResult = (res) => {
-			return options.lean ? res : (res && dbCursor.queryResolver.Model.fill(res));
+			return options.lean ? res : (res && new dbCursor.queryResolver.Model().set(res));
 		};
 
 		let cursor = this._db.collection(dbCursor.queryResolver.Model.collection());
+		let { query, select, sort, limit, skip, next, prev } = dbCursor.getState();
 
 		return new Promise((resolve, reject) => {
-			if (dbCursor.__next || dbCursor.__prev) {
-				if (!dbCursor.__query.$and) {
-					dbCursor.__query.$and = [];
-				}
+			if (next || prev) {
+				!query.$and && (query.$and = []);
 
-				dbCursor.__next && dbCursor.__query.$and.push({ _id: { $gt: dbCursor.__next } });
-				dbCursor.__prev && dbCursor.__query.$and.push({ _id: { $lt: dbCursor.__prev } });
+				next && query.$and.push({ _id: { $gt: next } });
+				prev && query.$and.push({ _id: { $lt: prev } });
 			}
 
-			cursor = cursor.find(dbCursor.__query);
+			query._id && (query._id = new ObjectID(query._id));
 
-			dbCursor.__sort && cursor.sort(this.__sort);
-			dbCursor.__skip && cursor.skip(this.__skip);
-			dbCursor.__limit && cursor.limit(this.__limit);
+			cursor = cursor.find(query, select);
+
+			sort && cursor.sort(sort);
+			skip && cursor.skip(parseInt(skip, 10));
+			limit && cursor.limit(parseInt(limit, 10));
 
 			cursor.toArray((err, result) => {
 				return err ? reject(err) : resolve(result.map(castResult));
@@ -72,11 +88,18 @@ export default class ProviderMongodb extends Provider {
 		});
 	}
 
-	findOne(dbCursor) {
-		let cursor = this._db.collection(dbCursor.__Model.collection());
+	findOne(dbCursor, options = {}) {
+		let castResult = (res) => {
+			return options.lean ? res : (res && new dbCursor.queryResolver.Model().set(res));
+		};
+
+		let cursor = this._db.collection(dbCursor.queryResolver.Model.collection());
+		let { query, select } = dbCursor.getState();
+
+		query._id && (query._id = new ObjectID(query._id));
 
 		return new Promise((resolve, reject) => {
-			cursor.findOne(this.__query, (err, result) => {
+			cursor.findOne(query, select, (err, result) => {
 				return err ? reject(err) : resolve(castResult(result));
 			});
 		});

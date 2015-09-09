@@ -1,0 +1,1 @@
+{"version":3,"sources":["../../src/component/component.es6"],"names":[],"mappings":";;;;;AAAA,MAAM,SAAS,CAAC;AACf,YAAW,CAAC,MAAM,EAAE;AACnB,MAAI,CAAC,MAAM,GAAG,MAAM,CAAC;EACrB;CACD;;qBAEc,SAAS","file":"component.js","sourcesContent":["class Component {\n\tconstructor(client) {\n\t\tthis.client = client;\n\t}\n}\n\nexport default Component;"]}

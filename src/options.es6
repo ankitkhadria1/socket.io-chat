@@ -2,7 +2,11 @@ export const EVENT_NEW_MESSAGE = 'newMessage';
 
 export const IO = 'io';
 
+/**
+ * @deprecated
+ */
 export const EVENT_PREFIX = 'eventPrefix';
+export const NAMESPACE = 'namespace';
 
 export const RECORD_ACTIVE            = 'recordActive';
 export const RECORD_ACTIVE_PER_MEMBER = 'recordActivePerMember';

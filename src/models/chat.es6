@@ -3,13 +3,13 @@ import SchemaLoader from '../schema';
 
 export default function (client, options = {}) {
 	let schema = SchemaLoader.load('chat');
-	let db     = client._db;
+	let db     = client.db;
 
 	if (!options.collectionName) options.collectionName = 'chat';
 
 	class Chat extends Model {
-		constructor(...args) {
-			super(...args);
+		constructor(data = {}) {
+			super(data);
 
 			super.initialize(options);
 		}
@@ -22,9 +22,13 @@ export default function (client, options = {}) {
 		}
 
 		addMember(member) {
-			this.members.addToSet(member);
+			this.members.addToSet({ _id: String(member) });
 
 			return this;
+		}
+
+		getMembersIds() {
+			return this.get('members').map(function (member) { return member._id });
 		}
 
 		// TODO: test with multiple clients. Static method can be invoked from the property `constructor` of the parent class;

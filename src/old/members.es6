@@ -52,7 +52,7 @@
 				id.forEach((id) => {
 					member = this.__members.get(String(id));
 					member && member.forEach(function (socket) {
-						socket && res.push(socket);
+						socket && res.indexOf(socket) === -1 && res.push(socket);
 					});
 				});
 

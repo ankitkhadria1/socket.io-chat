@@ -119,14 +119,40 @@ export class CursorFind extends Cursor {
 		return this;
 	}
 
+	getState() {
+		return {
+			query:  this.__query,
+			select: this.__select,
+			sort:   this.__sort,
+			limit:  this.__limit,
+			skip:   this.__skip,
+			next:   this.__next,
+			prev:   this.__prev
+		}
+	}
+
 	exec(options) {
 		return this.queryResolver.provider.find(this, options);
 	}
 }
 
-export class CursorFindOne extends Cursor {
+export class CursorFindOne extends CursorFind {
 	constructor(queryResolver) {
 		super(queryResolver);
+	}
+
+	findOne(query, select) {
+		this.__query = query;
+		this.select(select);
+
+		return this;
+	}
+
+	getState() {
+		return {
+			query: this.__query,
+			select: this.__select
+		}
 	}
 
 	exec(options = {}) {
@@ -169,7 +195,9 @@ export class CursorUpdate extends Cursor {
 	}
 
 	exec(options = {}) {
-		return this.queryResolver.provider.update(this, options);
+		return this.queryResolver.provider.name === 'mongodb'
+			? this.queryResolver.provider.findOneAndUpdate(this, options)
+			: this.queryResolver.provider.update(this, options);
 	}
 }
 
