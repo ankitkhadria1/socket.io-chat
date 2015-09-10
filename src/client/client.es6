@@ -1,5 +1,5 @@
 import { debug }        from '../debug';
-import { unique_m }        from '../utils';
+import { unique_m }     from '../utils';
 import BaseClient       from './base';
 import * as middleWares from '../middlewares';
 import * as EVENT       from '../events';
@@ -9,28 +9,35 @@ function onError(error) {
 	debug(error.stack);
 }
 
+const TIME_REQUESTS_COUNT  = 10;
+const LIMIT_DELTA_REQUESTS = 550;
+const REQUESTS_BAN         = 1000 * 60 * 2; // 2 minutes
+
+let TIME_REQUESTS     = Symbol('TIME_REQUESTS');
+let TIME_REQUESTS_BAN = Symbol('TIME_REQUESTS_BAN');
+
 class Client extends BaseClient {
 	constructor(server, options) {
 		super(server, options);
 
 		this.onAuthenticate.priority   = 100;
 		this.socketAuthorized.priority = 0;
+		this.requestTimes.priority     = 1;
 
 		this
-			.addEvent(EVENT.AUTHENTICATE, this.onAuthenticate)
-			.addEvent(EVENT.NEW_CHAT, this.socketAuthorized, this.onNewChat)
-			.addEvent(EVENT.NEW_MESSAGE, this.socketAuthorized, this.onNewMessage)
-			.addEvent(EVENT.FIND_CHATS, this.socketAuthorized, this.onFindChats)
-			.addEvent(EVENT.FIND_LAST_MESSAGES, this.socketAuthorized, this.onFindLastMessages)
-			.addEvent(EVENT.WRITE_MESSAGE, this.socketAuthorized, this.onWriteMessage)
-			//.addEvent(EVENT.START_WRITE, this.socketAuthorized, this.onStartWrite)
-			//.addEvent(EVENT.END_WRITE, this.socketAuthorized, this.onEndWrite)
+			.addEvent(EVENT.AUTHENTICATE, this.requestTimes, this.onAuthenticate)
+			.addEvent(EVENT.NEW_CHAT, this.requestTimes, this.socketAuthorized, this.onNewChat)
+			.addEvent(EVENT.NEW_MESSAGE, this.requestTimes, this.socketAuthorized, this.onNewMessage)
+			.addEvent(EVENT.FIND_CHATS, this.requestTimes, this.socketAuthorized, this.onFindChats)
+			.addEvent(EVENT.FIND_LAST_MESSAGES, this.requestTimes, this.socketAuthorized, this.onFindLastMessages)
+			.addEvent(EVENT.WRITE_MESSAGE, this.requestTimes, this.socketAuthorized, this.onWriteMessage)
 			//.addEvent(EVENT.FOCUS, this.socketAuthorized, this.onFocus)
 			//.addEvent(EVENT.BLUR, this.socketAuthorized, this.onBlur)
 		;
 
 		if (this.options[OPTION.CHAT_RECORD_COUNT_MESSAGES]) {
-			this.applyMiddleware(middleWares.chatRecordCountMessages);
+			this.post(middleWares.chatRecordCountMessages.event(), middleWares.chatRecordCountMessages);
+			process.exit(9);
 		}
 
 		if (this.options[OPTION.CHAT_RECORD_LAST_MESSAGES]) {
@@ -58,9 +65,9 @@ class Client extends BaseClient {
 	}
 
 	onAuthenticate(socket, data, next) {
-		socket.emit(this.eventName(EVENT.AUTHENTICATE), { result: { user: data._id } });
+		socket.emit(this.eventName(EVENT.AUTHENTICATE), {result: {user: data._id}});
 		this.members.add(data._id, socket);
-		this.emit('onAuthenticate', { socket })
+		this.emit('onAuthenticate', {socket})
 	}
 
 	onNewChat(socket, options, next) {
@@ -104,7 +111,7 @@ class Client extends BaseClient {
 					}
 				}
 
-				return this.respond(room).newMessage(options);
+				return this.respond(room).newMessage(options, options.uuid);
 			})
 			.then(function () {
 				//next();
@@ -126,7 +133,7 @@ class Client extends BaseClient {
 	onFindLastMessages(socket, options, next) {
 		this.findLastMessages(options, socket.user)
 			.then((data) => {
-				return this.respond(socket).findLastMessages(data)
+				return this.respond(socket).findLastMessages(data, options.uuid)
 			})
 			.then(function () {
 				next();
@@ -136,7 +143,11 @@ class Client extends BaseClient {
 
 	onWriteMessage(socket, options, next) {
 		if (socket.rooms.indexOf(options.chatId) !== -1) {
-			this.respond(this.namespace.to(options.chatId)).writeMessage({ chatId: options.chatId, isWrite: options.isWrite });
+			this.respond(this.namespace.to(options.chatId)).writeMessage({
+				chatId:  options.chatId,
+				isWrite: options.isWrite,
+				user:    socket.user
+			});
 		}
 	}
 
@@ -152,7 +163,7 @@ class Client extends BaseClient {
 				return chat.save();
 			})
 			.then((chat) => {
-				return { chat, user }
+				return {chat, user}
 			})
 			.then((options) => {
 				return this.postMiddleware(EVENT.NEW_CHAT, options)
@@ -163,9 +174,13 @@ class Client extends BaseClient {
 	newMessage(options = {}, user = null) {
 		let chat;
 
-		return this.preMiddleware(EVENT.NEW_CHAT, options)
+		return this.preMiddleware(EVENT.NEW_MESSAGE, options)
 			.then(() => {
-				return this.model.Chat.findOne({ _id: options.data.chatId, 'members._id': String(user) }).exec();
+				if (!options.data) {
+					options.data = {};
+				}
+
+				return this.model.Chat.findOne({_id: options.data.chatId, 'members._id': String(user)}).exec();
 			})
 			.then((result) => {
 				chat = result;
@@ -182,7 +197,10 @@ class Client extends BaseClient {
 				// TODO: what if else ?
 			})
 			.then((message) => {
-				return { chat, message, user };
+				return this.postMiddleware(EVENT.NEW_MESSAGE, {chat, message, user});
+			})
+			.then((results) => {
+				return results
 			})
 			.catch(onError);
 	}
@@ -190,9 +208,9 @@ class Client extends BaseClient {
 	findChats(options = {}, user = null) {
 		return this.preMiddleware(EVENT.FIND_CHATS, options)
 			.then(() => {
-				return this.model.Chat.find({ 'members._id': String(user) })
-					.sort({ lastMessageAt: 1 })
-					.exec({ lean: 1 })
+				return this.model.Chat.find({'members._id': String(user)})
+					.sort({lastMessageAt: 1})
+					.exec({lean: 1})
 			})
 			.then((results) => {
 				return this.postMiddleware(EVENT.FIND_CHATS, results);
@@ -203,8 +221,8 @@ class Client extends BaseClient {
 	findChatsUnread(options = {}, user = null) {
 		return this.preMiddleware(EVENT.FIND_CHATS_UNREAD, options)
 			.then(() => {
-				return this.model.Chat.find({ 'members._id': String(user), 'members.unreadCount': { $gt: 0 } })
-					.exec({ lean: 1 })
+				return this.model.Chat.find({'members._id': String(user), 'members.unreadCount': {$gt: 0}})
+					.exec({lean: 1})
 			})
 			.then((results) => {
 				return this.postMiddleware(EVENT.FIND_CHATS_UNREAD, results);
@@ -218,11 +236,11 @@ class Client extends BaseClient {
 				return this.model.Message.find({
 					chatId:    String(options.chatId),
 					receivers: String(user),
-					deleted:   { $nin: [user] }
+					deleted:   {$nin: [user]}
 				})
-					.sort({ createdAt: -1 })
+					.sort({createdAt: -1})
 					.limit(3)
-					.exec({ lean: 1 })
+					.exec({lean: 1})
 			})
 			.then((results) => {
 				results.sort(function (result) {
@@ -238,10 +256,62 @@ class Client extends BaseClient {
 	}
 
 	systemNotification() {
+
 	}
 
 	authorize(socket) {
 
+	}
+
+	// TODO: WRITE_MESSAGE can be do often, or just increase TIME_REQUESTS_COUNT
+	requestTimes(socket, data, next) {
+		var delta = 0, length = 0, diffs;
+
+		// TODO: key name of options move to OPTION module
+		var limitDeltaRequest = this.options.limitDeltaRequest || LIMIT_DELTA_REQUESTS,
+		    timeRequestsCount = this.options.timeRequestsCount || TIME_REQUESTS_COUNT;
+
+		if (!socket[TIME_REQUESTS]) {
+			socket[TIME_REQUESTS] = [];
+		}
+
+		if (socket[TIME_REQUESTS_BAN]) {
+			if (socket[TIME_REQUESTS_BAN] < Date.now()) {
+				delete socket[TIME_REQUESTS_BAN];
+			} else {
+				// TODO: key name of options move to OPTION module
+				this.options.emitOnBanNotOver && this.emit(EVENT.CLIENT_SOCKET_BAN_NOT_OVER, {socket});
+				return;
+			}
+		}
+
+		socket[TIME_REQUESTS].push(Date.now());
+
+		if (socket[TIME_REQUESTS].length > 5) {
+			if (socket[TIME_REQUESTS].length > timeRequestsCount) {
+				socket[TIME_REQUESTS].splice(0, socket[TIME_REQUESTS].length - timeRequestsCount);
+			}
+
+			length = socket[TIME_REQUESTS].length;
+
+			diffs = socket[TIME_REQUESTS].map(function (value, index) {
+				return index === length - 1 ? value - (socket[TIME_REQUESTS][index - 1] || 0) : socket[TIME_REQUESTS][index + 1] - value;
+			});
+
+			delta = diffs.reduce(function (prev, next) {
+				return prev + next;
+			});
+
+			if (delta < limitDeltaRequest) {
+				socket[TIME_REQUESTS_BAN] = Date.now() + (this.options.requestsBan || REQUESTS_BAN);
+				// TODO: key name of options move to OPTION module
+				this.options.emitOnBan && this.emit(EVENT.CLIENT_SOCKET_BAN, {socket})
+			} else {
+				next();
+			}
+		} else {
+			next();
+		}
 	}
 }
 

@@ -11,14 +11,16 @@ class RespondComponent extends Component {
 	}
 
 	newChat(options) {
-		this.namespace.emit(this.client.eventName(EVENT.NEW_CHAT), { result: { data: options.chat.toJSON() } });
+		this.namespace.emit(this.client.eventName(EVENT.NEW_CHAT), {result: {data: options.chat.toJSON()}});
 	}
 
-	newMessage(options) {
+	newMessage(options, uuid) {
 		// TODO: change
 
 		this.client.members
-			.get(options.chat.get('members').map(function (member) { return member._id }).map(String))
+			.get(options.chat.get('members').map(function (member) {
+				return member._id
+			}).map(String))
 			.forEach(function (member) {
 				member.join(String(options.chat._id))
 			});
@@ -26,8 +28,9 @@ class RespondComponent extends Component {
 		this.namespace.emit(this.client.eventName(EVENT.NEW_MESSAGE), {
 			result: {
 				chatId: String(options.chat._id),
-				data:   options.message.toJSON()
-			}
+				data: options.message.toJSON()
+			},
+			uuid: uuid
 		});
 	}
 
@@ -36,15 +39,18 @@ class RespondComponent extends Component {
 	}
 
 	findChats(options) {
-		this.namespace.emit(this.client.eventName(EVENT.FIND_CHATS), { result: { data: options } });
+		this.namespace.emit(this.client.eventName(EVENT.FIND_CHATS), {result: {data: options}});
 	}
 
 	findMessages() {
 
 	}
 
-	findLastMessages(options) {
-		this.namespace.emit(this.client.eventName(EVENT.FIND_LAST_MESSAGES), { result: { chatId: String(options.chatId), data: options.messages } });
+	findLastMessages(options, uuid) {
+		this.namespace.emit(this.client.eventName(EVENT.FIND_LAST_MESSAGES), {
+			result: {chatId: String(options.chatId), data: options.messages},
+			uuid: uuid
+		});
 	}
 
 	findFromMessages() {
@@ -56,7 +62,7 @@ class RespondComponent extends Component {
 	}
 
 	writeMessage(options) {
-		this.namespace.emit(this.client.eventName(EVENT.WRITE_MESSAGE), { result: options });
+		this.namespace.emit(this.client.eventName(EVENT.WRITE_MESSAGE), {result: options});
 	}
 }
 

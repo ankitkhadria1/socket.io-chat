@@ -66,6 +66,9 @@ export class chatRecordCountMessages extends Middleware {
 		}
 
 		options.chat.countMessages++;
+		options.chat.save().then(function () {
+			debug('save count messages');
+		});
 
 		next();
 	}

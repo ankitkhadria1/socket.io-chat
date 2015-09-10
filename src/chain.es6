@@ -5,8 +5,11 @@ import _                    from 'underscore';
 
 export let add = function (list) {
 	function push(callback) {
-		if (!_.isFunction(callback) && !(callback instanceof Middleware)) {
-			return debug('add chain middleware: callback is not a function', callback);
+		//if (callback.name === 'chatRecordCountMessages') {
+		//	debug(callback.prototype instanceof Middleware);
+		//}
+		if (!_.isFunction(callback) && !(callback.prototype instanceof Middleware)) {
+			return debug('add chain middleware: callback is not a function or Middleware instance', callback);
 		}
 
 		if (!callback.hasOwnProperty(LABEL_PRIORITY)) {
@@ -46,7 +49,13 @@ export let exec = function (chain = [], context = {}) {
 
 			if (chainItem) {
 				index++;
-				return chainItem instanceof Middleware ? chainItem.exec.apply(chainItem, data.concat(next)) : chainItem.apply(context, data.concat(next));
+
+				if (chainItem.prototype instanceof Middleware) {
+					let _chainItem = new chainItem(context);
+					return _chainItem.exec.apply(_chainItem, data.concat(next));
+				} else {
+					return chainItem.apply(context, data.concat(next))
+				}
 			}
 
 			if (index === chain.length) {
